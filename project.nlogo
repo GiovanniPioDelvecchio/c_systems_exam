@@ -1,7 +1,4 @@
-to setup
-  make-turtles
-end
-
+; a quick function to pad nodes, we just don't want them along the border of the view
 to fix-positions [distance-from-borders reposition-magnitude]
   ask turtles [
     if abs(pxcor - min-pxcor) < distance-from-borders [setxy pxcor + reposition-magnitude pycor]
@@ -11,39 +8,71 @@ to fix-positions [distance-from-borders reposition-magnitude]
   ]
 end
 
-to adaptive-fixed
-  fix-positions 5 5
+; we create a button with this name
+to pad-nodes
+  fix-positions 5 5 ; it just calls the above function with temporary constant values
 end
 
-to make-turtles
-  ca
-  crt (num-nodes) [
-    set shape "circle"
-    set xcor random-xcor
-    set ycor random-ycor
+; here's some code about how to make turtles, they are nodes in a graph
+; represented visually in the NetLogo plotting view when we press a button
+; calling this function
+to setup
+  ca ;short for clear all
+  crt (num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
+                    ; while in the brackets it is possible to specify characteristics (attributes) of
+                    ; these turtles
+    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+    set xcor random-xcor ; here we set the xposition of each turtle to be random in the range [min-pxcor, max-pxcor]
+    set ycor random-ycor ; here we set the xposition of each turtle to be random in the range [min-pycor, max-pycor]
+    set size 3 ; here we set the size of the turtle
+    ; if not specified, the color of the turtles will be random
   ]
-  ask turtles [set size 3]
+  add-edges
 end
 
+; here's some code about how to link turtles in such a way that
+; they resemble the Erdős-Rényi model, meaning that we
+; add each of the possible n(n-1)/2 links between nodes with probability edge-probability, an external probability value
 to add-edges
-  ask links [set color [color] of end1 set thickness 0]
-  if not any? turtles [
-    print "Set a number of nodes greater than 0 and press 'setup'"
+  ask links [set color grey set thickness 0] ; let us be stylish first, we want our links to have the same color so that it doesn't seem messy
+  if not any? turtles [; if we have no turtles we cannot create links
+    print "Set a number of nodes greater than 0 and press 'setup'" ; we report this as a console log
     stop
   ]
-  let turtle-list (sort turtles)
+  if num-nodes = 1 [ ; we cannot create a link from one node to itself
+    print "You need at least two turtles in order to create a link"; we log this
+  ]
+  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
+
   ;let max-edges = (num-nodes * (num-nodes - 1)) / 2
-  let i 1
+  ; we create two indexes needed to access the list of turtles as the
+  ; upper triangular part of the adjacency matrix, whituout the diagonal
+  ; since we cannot create a link from one node to itself
+  let i 0 ; first index in range [0, num-nodes-1]
   while [i < num-nodes][
-    let j 0
+    let j 0 ; second index in range [0, i]
     while [j < i] [
-      if ((random-float 1) > edge-probability) [
-        ask (item i turtle-list) [create-link-with (item j turtle-list)]
+      if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                                 ; the external parameter we add a link
+        ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles
       ]
       set j (j + 1)
     ]
     set i (i + 1)
   ]
+end
+
+to-report average-num-friends
+  let acc 0
+  ask turtles [set acc (acc + (length (sort link-neighbors)))]
+  report (acc / num-nodes)
+end
+
+to-report average-num-ff
+  let denom (average-num-friends * num-nodes)
+  let acc 0
+  ask turtles [set acc (acc + ((length (sort link-neighbors))) ^ 2)]
+  report (acc / denom)
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -82,7 +111,7 @@ num-nodes
 num-nodes
 0
 100
-5.0
+22.0
 1
 1
 NIL
@@ -105,40 +134,6 @@ NIL
 NIL
 1
 
-BUTTON
-81
-21
-193
-54
-NIL
-adaptive-fixed
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-16
-166
-106
-199
-NIL
-add-edges
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
 8
 108
@@ -148,11 +143,50 @@ edge-probability
 edge-probability
 0
 1
-0.5
+0.85
 0.01
 1
 NIL
 HORIZONTAL
+
+BUTTON
+85
+21
+183
+54
+NIL
+pad-nodes
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+267
+95
+396
+140
+average-num-friends
+average-num-friends
+17
+1
+11
+
+MONITOR
+267
+146
+368
+191
+NIL
+average-num-ff
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
