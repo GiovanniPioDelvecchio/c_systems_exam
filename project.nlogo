@@ -22,12 +22,15 @@ to setup
                     ; while in the brackets it is possible to specify characteristics (attributes) of
                     ; these turtles
     set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+
     set xcor random-xcor ; here we set the xposition of each turtle to be random in the range [min-pxcor, max-pxcor]
     set ycor random-ycor ; here we set the xposition of each turtle to be random in the range [min-pycor, max-pycor]
-    set size 3 ; here we set the size of the turtle
+    set size 1.5 ; here we set the size of the turtle
     ; if not specified, the color of the turtles will be random
   ]
-  add-edges
+  ;add-edges
+  layout-circle (sort turtles) max-pxcor - 1
+  wire-lattice
 end
 
 ; here's some code about how to link turtles in such a way that
@@ -52,9 +55,11 @@ to add-edges
   while [i < num-nodes][
     let j 0 ; second index in range [0, i]
     while [j < i] [
-      if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
+      if (i != j) [
+        if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
                                                  ; the external parameter we add a link
         ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles
+        ]
       ]
       set j (j + 1)
     ]
@@ -73,6 +78,76 @@ to-report average-num-ff
   let acc 0
   ask turtles [set acc (acc + ((length (sort link-neighbors))) ^ 2)]
   report (acc / denom)
+end
+
+to-report cc-for-single-turtle [turtle-index]
+  let acc 0
+  let deg 0
+  let turtle-list (sort turtles)
+  ;print turtle-index
+  ask (item turtle-index turtle-list) [
+    let neigh (sort link-neighbors)
+    set deg (length neigh)
+    let i 0
+    while [i < deg] [
+      let j 0
+      while [j < i]
+      [
+        if (i != j) [
+          ask (item j neigh) [if (link-neighbor? (item i neigh)) [set acc (acc + 1)]]
+        ]
+        set j (j + 1)
+      ]
+      set i (i + 1)
+    ]
+  ]
+  ifelse (deg <= 1) [report 0] [report (acc / ((deg * (deg - 1)) / 2))]
+end
+
+to-report clustering-coefficient
+  let turtle-list (sort turtles)
+  let acc 0
+  let i 0
+  while [i < (length turtle-list)]
+  [
+    set acc (acc + (cc-for-single-turtle i))
+    set i (i + 1)
+  ]
+  report (acc / num-nodes)
+end
+
+
+to wire-lattice
+  ; iterate over the turtles
+  let n 0
+  while [ n < count turtles ] [
+    ; make edges with the next two neighbors
+    ; this makes a lattice with average degree of 4
+    make-edge turtle n
+              turtle ((n + 1) mod count turtles)
+              "default"
+    ; Make the neighbor's neighbor links curved
+    make-edge turtle n
+              turtle ((n + 2) mod count turtles)
+              "curve"
+    set n n + 1
+  ]
+
+  ; Because of the way NetLogo draws curved links between turtles of ascending
+  ; `who` number, two of the links near the top of the network will appear
+  ; flipped by default. To avoid this, we used an inverse curved link shape
+  ; ("curve-a") which makes all of the curves face the same direction.
+  ask link 0 (count turtles - 2) [ set shape "curve-a" ]
+  ask link 1 (count turtles - 1) [ set shape "curve-a" ]
+end
+
+; Connects two nodes
+to make-edge [ node-A node-B the-shape ]
+  ask node-A [
+    create-link-with node-B  [
+      set shape the-shape
+    ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -111,7 +186,7 @@ num-nodes
 num-nodes
 0
 100
-22.0
+40.0
 1
 1
 NIL
@@ -143,7 +218,7 @@ edge-probability
 edge-probability
 0
 1
-0.85
+0.73
 0.01
 1
 NIL
@@ -184,6 +259,17 @@ MONITOR
 191
 NIL
 average-num-ff
+17
+1
+11
+
+MONITOR
+288
+219
+416
+264
+NIL
+clustering-coefficient
 17
 1
 11
@@ -538,6 +624,28 @@ NetLogo 6.3.0
 @#$#@#$#@
 default
 0.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
+
+curve
+3.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
+
+curve-a
+-3.0
 -0.2 0 0.0 1.0
 0.0 1 1.0 0.0
 0.2 0 0.0 1.0
