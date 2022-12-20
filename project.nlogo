@@ -18,7 +18,7 @@ end
 ; calling this function
 to setup
   ca ;short for clear all
-  crt (num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
+  crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
                     ; while in the brackets it is possible to specify characteristics (attributes) of
                     ; these turtles
     set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
@@ -29,8 +29,10 @@ to setup
     ; if not specified, the color of the turtles will be random
   ]
   ;add-edges
-  layout-circle (sort turtles) max-pxcor - 1
-  wire-lattice
+  ;layout-circle (sort turtles) max-pxcor - 1
+  ;wire-lattice
+  add-edges
+  reset-ticks
 end
 
 ; here's some code about how to link turtles in such a way that
@@ -42,7 +44,7 @@ to add-edges
     print "Set a number of nodes greater than 0 and press 'setup'" ; we report this as a console log
     stop
   ]
-  if num-nodes = 1 [ ; we cannot create a link from one node to itself
+  if ((count turtles) = 1) [ ; we cannot create a link from one node to itself
     print "You need at least two turtles in order to create a link"; we log this
   ]
   let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
@@ -52,13 +54,14 @@ to add-edges
   ; upper triangular part of the adjacency matrix, whituout the diagonal
   ; since we cannot create a link from one node to itself
   let i 0 ; first index in range [0, num-nodes-1]
-  while [i < num-nodes][
+  while [i < (count turtles)][
     let j 0 ; second index in range [0, i]
     while [j < i] [
       if (i != j) [
         if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
                                                  ; the external parameter we add a link
-        ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles
+        ;ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles.
+          make-edge (turtle i) (turtle j) "default"
         ]
       ]
       set j (j + 1)
@@ -70,11 +73,11 @@ end
 to-report average-num-friends
   let acc 0
   ask turtles [set acc (acc + (length (sort link-neighbors)))]
-  report (acc / num-nodes)
+  report (acc / (count turtles))
 end
 
 to-report average-num-ff
-  let denom (average-num-friends * num-nodes)
+  let denom (average-num-friends * (count turtles))
   let acc 0
   ask turtles [set acc (acc + ((length (sort link-neighbors))) ^ 2)]
   report (acc / denom)
@@ -113,23 +116,26 @@ to-report clustering-coefficient
     set acc (acc + (cc-for-single-turtle i))
     set i (i + 1)
   ]
-  report (acc / num-nodes)
+  report (acc / (count turtles))
 end
 
 
 to wire-lattice
   ; iterate over the turtles
+  if (watts-stogatz-k >= (count turtles)) [
+    print "You need more nodes than neighbors to link"
+    stop
+  ]
   let n 0
   while [ n < count turtles ] [
-    ; make edges with the next two neighbors
-    ; this makes a lattice with average degree of 4
-    make-edge turtle n
-              turtle ((n + 1) mod count turtles)
-              "default"
-    ; Make the neighbor's neighbor links curved
-    make-edge turtle n
-              turtle ((n + 2) mod count turtles)
-              "curve"
+    let j 1
+    while [j <= watts-stogatz-k] [
+      ;ifelse (j = 1) [
+      ;  make-edge (turtle n) (turtle ((n + j) mod count turtles)) "default"]
+      ;[make-edge (turtle n) (turtle ((n + j) mod count turtles)) "curve"]
+      make-edge (turtle n) (turtle ((n + j) mod count turtles)) "curve"
+      set j (j + 1)
+    ]
     set n n + 1
   ]
 
@@ -137,17 +143,171 @@ to wire-lattice
   ; `who` number, two of the links near the top of the network will appear
   ; flipped by default. To avoid this, we used an inverse curved link shape
   ; ("curve-a") which makes all of the curves face the same direction.
-  ask link 0 (count turtles - 2) [ set shape "curve-a" ]
-  ask link 1 (count turtles - 1) [ set shape "curve-a" ]
+  let j 0
+  while [j < watts-stogatz-k] [
+    let k 0
+    while [k < watts-stogatz-k] [
+      if (link? j (count turtles - watts-stogatz-k + k)) [
+      ask link j (count turtles - watts-stogatz-k + k) [set shape "curve-a"]
+      ]
+      set k (k + 1)
+    ]
+    set j (j + 1)
+  ]
 end
 
-; Connects two nodes
+
 to make-edge [ node-A node-B the-shape ]
   ask node-A [
-    create-link-with node-B  [
-      set shape the-shape
+    if (not link? node-A node-B) [
+      create-link-with node-B  [
+        set shape the-shape
+      ]
     ]
   ]
+end
+
+to-report link? [node-A node-B]
+  let reportable False
+  ifelse ((is-turtle? node-A) and (is-turtle? node-B))
+  [ask node-A [set reportable (member? node-B link-neighbors)]
+   ask node-B [set reportable (reportable or (member? node-B link-neighbors))]
+  ]
+  [set reportable ((is-link? (link node-A node-B)) or (is-link? (link node-B node-A)))]
+  report reportable
+end
+
+to destroy-edge [node-A node-B]
+  if (link? node-A node-B) [
+    ask link node-A node-B [die]
+  ]
+end
+
+to simple-random-dynamics
+  if (count turtles) = 1 [ ; we cannot create a link from one node to itself
+    print "You need at least two turtles in order to create a link"; we log this
+  ]
+  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
+
+  ;let max-edges = (num-nodes * (num-nodes - 1)) / 2
+  ; we create two indexes needed to access the list of turtles as the
+  ; upper triangular part of the adjacency matrix, whituout the diagonal
+  ; since we cannot create a link from one node to itself
+  let i 0 ; first index in range [0, num-nodes-1]
+  while [i < (count turtles)][
+    let j 0 ; second index in range [0, i]
+    while [j < i] [
+      if (i != j) [
+        if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                                 ; the external parameter we add a link
+        ;ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles.
+          make-edge (turtle i) (turtle j) "default"
+        ]
+        if ((random-float 1) >= edge-probability) [
+          if (link? i j) [destroy-edge i j]
+        ]
+      ]
+      set j (j + 1)
+    ]
+    set i (i + 1)
+  ]
+  tick
+end
+
+to add-node-uniform-random
+  create-turtles 1 [
+    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+    set size 1.5 ; here we set the size of the turtle
+    ; if not specified, the color of the turtles will be random
+    set xcor random-xcor
+    set ycor random-ycor
+  ]
+  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
+  let just-added-turtle ((length turtle-list) - 1)
+  if (just-added-turtle = 1) [stop] ;if we only have one turtle, namely the one that we just added, we don't have to add links
+  let i 0 ; first index in range [0, num-nodes-1]
+  while [i < just-added-turtle][
+    if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                             ; the external parameter we add a link
+    ;ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles.
+      make-edge (turtle i) (turtle just-added-turtle) "default"
+    ]
+    set i (i + 1)
+  ]
+  tick
+end
+
+to layout
+  ;; the number 3 here is arbitrary; more repetitions slows down the
+  ;; model, but too few gives poor layouts
+  repeat 3 [
+    ;; the more turtles we have to fit into the same amount of space,
+    ;; the smaller the inputs to layout-spring we'll need to use
+    let factor sqrt count turtles
+    ;; numbers here are arbitrarily chosen for pleasing appearance
+    layout-spring turtles links (1 / factor) (7 / factor) (1 / factor)
+    display  ;; for smooth animation
+  ]
+  ;; don't bump the edges of the world
+  let x-offset max [xcor] of turtles + min [xcor] of turtles
+  let y-offset max [ycor] of turtles + min [ycor] of turtles
+  ;; big jumps look funny, so only adjust a little each time
+  set x-offset limit-magnitude x-offset 0.1
+  set y-offset limit-magnitude y-offset 0.1
+  ask turtles [ setxy (xcor - x-offset / 2) (ycor - y-offset / 2) ]
+end
+
+to-report limit-magnitude [number limit]
+  if number > limit [ report limit ]
+  if number < (- limit) [ report (- limit) ]
+  report number
+end
+
+;; resize-nodes, change back and forth from size based on degree to a size of 1
+to resize-nodes
+  ifelse all? turtles [size <= 1.5]
+  [
+    ;; a node is a circle with diameter determined by
+    ;; the SIZE variable; using SQRT makes the circle's
+    ;; area proportional to its degree
+    ask turtles [ if ((count link-neighbors) > 0) [set size sqrt count link-neighbors]]
+  ]
+  [
+    ask turtles [ set size 1.5 ]
+  ]
+end
+
+to add-node-preferential-attachment-barbási-albert
+  create-turtles 1 [
+    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+    set size 1.5 ; here we set the size of the turtle
+    ; if not specified, the color of the turtles will be random
+    set xcor random-xcor
+    set ycor random-ycor
+  ]
+  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
+  let just-added-turtle ((length turtle-list) - 1)
+  if (just-added-turtle = 1) [stop] ;if we only have one turtle, namely the one that we just added, we don't have to add links
+  let edge-prob-i 1
+  let edge-prob-acc 0
+
+  let acc-degrees 0
+  set acc-degrees (acc-degrees + (sum [count link-neighbors] of turtles))
+
+  let extracted-rand (random-float 1)
+  let i 0 ; first index in range [0, num-nodes-1]
+  while [i < just-added-turtle][
+    ask (turtle i) [set edge-prob-i ((count link-neighbors) / (acc-degrees))
+    set edge-prob-acc (edge-prob-acc + edge-prob-i)]
+    if (extracted-rand <= edge-prob-acc) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                          ; the barbási-albert probability of linking to that node, we create the link
+    ;ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles.
+      make-edge (turtle i) (turtle just-added-turtle) "default"
+      set i just-added-turtle
+    ]
+    set i (i + 1)
+  ]
+  tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -171,32 +331,17 @@ GRAPHICS-WINDOW
 25
 -25
 25
-0
-0
+1
+1
 1
 ticks
 30.0
 
-SLIDER
-9
-67
-181
-100
-num-nodes
-num-nodes
-0
-100
-40.0
-1
-1
-NIL
-HORIZONTAL
-
 BUTTON
 9
-21
+70
 72
-54
+103
 NIL
 setup
 NIL
@@ -210,25 +355,25 @@ NIL
 1
 
 SLIDER
-8
-108
-180
-141
+73
+70
+245
+103
 edge-probability
 edge-probability
 0
 1
-0.73
+0.83
 0.01
 1
 NIL
 HORIZONTAL
 
 BUTTON
-85
-21
-183
-54
+353
+616
+451
+649
 NIL
 pad-nodes
 NIL
@@ -242,10 +387,10 @@ NIL
 1
 
 MONITOR
-267
-95
-396
-140
+1122
+208
+1251
+253
 average-num-friends
 average-num-friends
 17
@@ -253,10 +398,10 @@ average-num-friends
 11
 
 MONITOR
-267
-146
-368
-191
+1122
+254
+1223
+299
 NIL
 average-num-ff
 17
@@ -264,15 +409,151 @@ average-num-ff
 11
 
 MONITOR
-288
-219
-416
-264
+1123
+302
+1251
+347
 NIL
 clustering-coefficient
 17
 1
 11
+
+INPUTBOX
+165
+10
+320
+70
+watts-stogatz-k
+2.0
+1
+0
+Number
+
+BUTTON
+7
+183
+173
+216
+NIL
+simple-random-dynamics
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+7
+145
+189
+178
+NIL
+add-node-uniform-random
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+352
+582
+452
+615
+re-do layout
+layout
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+352
+648
+453
+681
+resize nodes
+resize-nodes
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+1123
+57
+1323
+207
+Degree Distribution
+degree
+# of nodes
+1.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "let max-degree max [count link-neighbors] of turtles\nlet min-degree min [count link-neighbors] of turtles\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-degree (max-degree + 1)  ;; + 1 to make room for the width of the last bar\nhistogram [count link-neighbors] of turtles"
+
+INPUTBOX
+9
+10
+164
+70
+starting-num-nodes
+4.0
+1
+0
+Number
+
+MONITOR
+1124
+11
+1198
+56
+num-nodes
+count turtles
+17
+1
+11
+
+BUTTON
+193
+145
+327
+178
+add-node-barbási-albert
+add-node-preferential-attachment-barbási-albert
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
