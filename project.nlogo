@@ -309,6 +309,204 @@ to add-node-preferential-attachment-barbási-albert
   ]
   tick
 end
+
+to-report connected-component [starting-turtle]
+  ; Create an empty list to store the nodes in the connected component
+  let connected-component-list []
+  let queue []
+
+  let current-turtle starting-turtle
+  ; Add the given turtle to the connected component
+  set connected-component-list lput current-turtle connected-component-list
+  set queue lput current-turtle queue
+  ; Iterate through all the links of the given turtle
+  while [not empty? queue][
+    ;print queue
+    set current-turtle item 0 queue
+    set queue remove-item 0 queue
+    ask current-turtle [
+      ; For each link, add the other end of the link to the connected component
+      ask my-links [
+        ; we don't want to keep duplicates, here we use connected-component-list as the list
+        ; of visited nodes in a BFS
+        if (not member? other-end connected-component-list) [
+          set connected-component-list lput other-end connected-component-list
+          set queue lput other-end queue
+        ]
+      ]
+    ]
+  ]
+ ; Return the list of nodes in the connected component
+ report connected-component-list
+end
+
+to-report get-giant-component
+  ; I will start from index 1 because in the cycle we consider the other components
+  let i 1
+  ; a security check, we can talk about components only if we have nodes
+  if ((count turtles) < 1) [report []]
+  ; here we consider the first component as the current one
+  let current-component (connected-component turtle 0)
+  ; and set the variable needed to keep track of the cardinality of the component
+  let max-size length current-component
+  ; we set the component to report as the current one
+  let node-list-to-report current-component
+  ; for each node we consider its component, if it is larger than the current
+  ; giant component we update both node-list-to-report and max-len
+  while [i < count turtles] [
+    set current-component (connected-component turtle i)
+    if (length current-component > max-size) [
+      set max-size length current-component
+      set node-list-to-report current-component
+    ]
+    set i i + 1
+  ]
+  ; here we report the list of nodes in the giant component
+  report node-list-to-report
+end
+
+to-report get-fraction-in-giant-component
+  if ((count turtles) < 1 ) [report 0]
+  report (length get-giant-component) / (count turtles)
+end
+
+; Breadth first search algorithm implementation
+to-report bfs [start-node target-node]
+  ; Create an empty queue for storing the nodes to visit
+  let queue []
+  ; Add the start node to the queue
+  set queue lput start-node queue
+
+  ; Create a list to store the nodes that have been visited
+  let visited []
+
+  ; Run the BFS algorithm until the queue is empty
+  while [not empty? queue] [
+    ; Get the next node from the queue
+    let current-node first queue
+    set queue but-first queue
+
+    ; If the current node is the target node, stop the search
+    if current-node = target-node [
+      if not member? current-node visited [
+        set visited lput current-node visited
+      ]
+      report visited
+    ]
+
+    ; If the current node has not been visited yet, add it to the visited list
+    if not member? current-node visited [
+      set visited lput current-node visited
+      ; Add all the neighbors of the current node to the queue
+      ask current-node [
+        ask my-links [
+          set queue lput other-end queue
+        ]
+      ]
+    ]
+  ]
+  ; If the target node was not found, return false
+  report false
+end
+
+to-report convert-turtle-to-id [turtle-to-conv]
+  let to-rep 0
+  ask turtle-to-conv [set to-rep who]
+  report to-rep
+end
+
+to-report argmin [list-to-check]
+  let i 1
+  if empty? list-to-check [report False]
+  let min-val (item 0 list-to-check)
+  let idx-to-rep 0
+  while [i < length list-to-check] [
+    if (item i list-to-check < min-val) [
+      set min-val (item i list-to-check)
+      set idx-to-rep i
+    ]
+    set i i + 1
+  ]
+  report idx-to-rep
+end
+
+to-report keep-turtle-related [dist-list turtle-list]
+  let to-rep []
+  let i 0
+  while [i < length turtle-list] [
+    set to-rep lput (item (convert-turtle-to-id item i turtle-list) dist-list) to-rep
+    set i i + 1
+  ]
+  report to-rep
+end
+
+; variation of the Dijkstra's algorithm, since in NetLogo we don't really have primitives
+; to indicate the number "Infinity", we decide to use a stupidly large number, in this case
+; 10000000000
+to-report shortest-path [source-t target-t]
+  let distances []
+  let previous []
+  while [length distances < count turtles] [
+    set distances lput 1.0E10 distances
+    set previous lput -1 previous
+  ]
+
+  let unvisited sort turtles
+  set distances replace-item (convert-turtle-to-id source-t) distances 0
+  let current-node source-t
+
+
+  while [not empty? unvisited] [
+    set current-node (item (argmin keep-turtle-related distances unvisited) unvisited)
+    if (item (convert-turtle-to-id current-node) distances = 1.0E10) [
+      report False
+    ]
+    if current-node = target-t [
+      set unvisited []
+
+    ]
+    set unvisited remove current-node unvisited
+    ask current-node [
+      ask my-links [
+        ; relaxation (d[v]+c[v,u]<d[u]->update d[u])
+        let alt (item convert-turtle-to-id current-node distances) + 1
+        if alt < (item convert-turtle-to-id other-end distances) [
+          set distances replace-item (convert-turtle-to-id other-end) distances alt
+          set previous replace-item (convert-turtle-to-id other-end) previous current-node
+        ]
+      ]
+    ]
+  ]
+  let path []
+  if current-node = target-t [
+    while [current-node != -1][
+      set path lput current-node path
+      set current-node (item convert-turtle-to-id current-node previous)
+    ]
+    report path
+  ]
+end
+
+to-report average-path-length
+  let i 0
+  let num-paths 0
+  let acc-path-lengths 0
+  while [i < count turtles]
+  [
+    let j 0
+    while [j < i] [
+      let sp-ij (shortest-path (turtle i) (turtle j))
+      if sp-ij != False [
+        set acc-path-lengths acc-path-lengths + (length sp-ij)
+        set num-paths num-paths + 1
+
+      ]
+      set j j + 1
+    ]
+    set i i + 1
+  ]
+  report acc-path-lengths / num-paths
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 452
