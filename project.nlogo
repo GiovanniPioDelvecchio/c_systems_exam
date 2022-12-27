@@ -72,16 +72,78 @@ end
 
 to-report average-num-friends
   let acc 0
-  ask turtles [set acc (acc + (length (sort link-neighbors)))]
+  ask turtles [set acc (acc + (length (sort my-links)))]
   report (acc / (count turtles))
+end
+
+to-report ff-for-single-node [node-ff]
+  let acc 0
+  let num-neigh 0
+  ask node-ff [
+    ;set num-neigh count my-links
+    ;if (num-neigh = 0) [stop]
+    ask my-links [
+      ask other-end [
+        set acc (acc + (count my-links))
+      ]
+    ]
+  ]
+  report acc
+end
+
+to-report get-ff-list
+  let list-to-report []
+  let i 0
+  while [i < count turtles] [
+    set list-to-report lput (ff-for-single-node turtle i) list-to-report
+    set i i + 1
+  ]
+  report list-to-report
+end
+
+to-report mean-ff-for-single-node [node-ff]
+  let acc 0
+  let num-neigh 0
+  ask node-ff [
+    set num-neigh count my-links
+    if (num-neigh = 0) [set num-neigh 1]
+    ask my-links [
+      ask other-end [
+        set acc (acc + (count my-links))
+      ]
+    ]
+  ]
+  report acc / num-neigh
+end
+
+to-report get-mean-ff-list
+  let list-to-report []
+  let i 0
+  while [i < count turtles] [
+    set list-to-report lput (mean-ff-for-single-node turtle i) list-to-report
+    set i i + 1
+  ]
+  report list-to-report
+end
+
+
+to-report average-num-ff-2
+  let acc 0
+  let i 0
+  while [i < count turtles] [
+    set acc (acc + ff-for-single-node (turtle i))
+    set i i + 1
+  ]
+  report acc / ((count links) * 2)
 end
 
 to-report average-num-ff
   let denom (average-num-friends * (count turtles))
   let acc 0
-  ask turtles [set acc (acc + ((length (sort link-neighbors))) ^ 2)]
+  ask turtles [set acc (acc + ((length (sort my-links))) ^ 2)]
   report (acc / denom)
 end
+
 
 to-report cc-for-single-turtle [turtle-index]
   let acc 0
@@ -507,15 +569,83 @@ to-report average-path-length
   ]
   report acc-path-lengths / num-paths
 end
+
+to-report public-goods
+  let reportable-payoffs-list []
+  let y-i-s []
+  let selfish-collaborative-vector []
+  let y-max-turtles 12
+  let i 0
+  while [i < count turtles] [
+    ifelse ((random-float 1) < 0.5) [
+      set selfish-collaborative-vector lput "selfish" selfish-collaborative-vector
+      set y-i-s lput (random-float (y-max-turtles / 2)) y-i-s
+    ][
+      set selfish-collaborative-vector lput "collaborative" selfish-collaborative-vector
+      set y-i-s lput ((random-float (y-max-turtles / 2)) + (y-max-turtles / 2)) y-i-s
+    ]
+    set i i + 1
+  ]
+  set reportable-payoffs-list (get-payoffs-list y-i-s selfish-collaborative-vector y-max-turtles)
+  report reportable-payoffs-list
+end
+
+to-report sum-neigh-payoffs [l-where-sum idx]
+  let reportable 0
+  let neighs []
+  ask (turtle idx) [set neighs sort link-neighbors]
+  let i 0
+  while [i < length neighs]
+  [
+    let payoff-to-sum (item (convert-turtle-to-id (item i neighs)) l-where-sum)
+    set reportable (reportable + payoff-to-sum)
+
+    set i i + 1
+  ]
+  report reportable
+end
+
+to-report get-payoffs-list [y-i-s selfish-collaborative-vector y-max-turtles]
+  let reportable-payoffs-list []
+
+  let b-selfish 0.9
+  let b-collaborative 1.1
+  let i 0
+  while [i < count turtles]
+  [
+    let current-payoff 0
+    ifelse (item i selfish-collaborative-vector) = "selfish" [
+      set current-payoff ((y-max-turtles - (item i y-i-s)) + b-selfish * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
+    ][
+      set current-payoff ((y-max-turtles - (item i y-i-s)) + b-collaborative * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
+    ]
+    set reportable-payoffs-list lput current-payoff reportable-payoffs-list
+    set i i + 1
+  ]
+  report reportable-payoffs-list
+end
+
+to-report get-neigh-payoffs [curr-node payoff-list]
+  let reportable []
+  let neighs []
+  ask (curr-node) [set neighs sort link-neighbors]
+  let i 0
+  while [i < length neighs] [
+    set reportable lput (item (convert-turtle-to-id item i neighs) payoff-list) reportable
+    set i i + 1
+  ]
+  report reportable
+end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 452
 10
-1123
-682
+941
+500
 -1
 -1
-13.0
+9.4314
 1
 10
 1
@@ -561,17 +691,17 @@ edge-probability
 edge-probability
 0
 1
-0.83
+0.24
 0.01
 1
 NIL
 HORIZONTAL
 
 BUTTON
-353
-616
-451
-649
+352
+432
+450
+465
 NIL
 pad-nodes
 NIL
@@ -585,10 +715,10 @@ NIL
 1
 
 MONITOR
-1122
-208
-1251
-253
+942
+102
+1071
+147
 average-num-friends
 average-num-friends
 17
@@ -596,10 +726,10 @@ average-num-friends
 11
 
 MONITOR
-1122
-254
-1223
-299
+942
+147
+1043
+192
 NIL
 average-num-ff
 17
@@ -607,10 +737,10 @@ average-num-ff
 11
 
 MONITOR
-1123
-302
-1251
-347
+942
+58
+1070
+103
 NIL
 clustering-coefficient
 17
@@ -663,10 +793,10 @@ NIL
 1
 
 BUTTON
-352
-582
-452
-615
+351
+398
+451
+431
 re-do layout
 layout
 T
@@ -680,10 +810,10 @@ NIL
 1
 
 BUTTON
-352
-648
-453
-681
+351
+464
+452
+497
 resize nodes
 resize-nodes
 NIL
@@ -697,10 +827,10 @@ NIL
 1
 
 PLOT
-1123
-57
-1323
-207
+942
+192
+1142
+342
 Degree Distribution
 degree
 # of nodes
@@ -726,9 +856,9 @@ starting-num-nodes
 Number
 
 MONITOR
-1124
+942
 11
-1198
+1016
 56
 num-nodes
 count turtles
@@ -752,6 +882,42 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+942
+344
+1142
+494
+Friends of friends distribution
+friends of friends
+# of nodes
+1.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "let max-ff max get-ff-list\nlet min-ff min get-ff-list\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-ff (max-ff + 1)  ;; + 1 to make room for the width of the last bar\nhistogram get-ff-list"
+
+PLOT
+1141
+192
+1341
+342
+mean friends of friends distribution
+mean ff value
+# of nodes
+1.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "let max-ff max get-mean-ff-list\nlet min-ff min get-mean-ff-list\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-ff (max-ff + 1)  ;; + 1 to make room for the width of the last bar\nhistogram get-mean-ff-list"
 
 @#$#@#$#@
 ## WHAT IS IT?
