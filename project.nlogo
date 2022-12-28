@@ -74,6 +74,13 @@ to setup
     set size 1.5 ; here we set the size of the turtle
     ; if not specified, the color of the turtles will be random
   ]
+  ask turtles [
+    ifelse ((random-float 1) < 0.5) [
+      set color 55 ; since the simulation is about checking whether a turtle will be cooperative ("green")
+    ][
+      set color 15 ; or selfish ("red")
+    ]
+  ]
   ;add-edges
   ;layout-circle (sort turtles) max-pxcor - 1
   ;wire-lattice
@@ -329,6 +336,11 @@ to add-node-uniform-random
     ; if not specified, the color of the turtles will be random
     set xcor random-xcor
     set ycor random-ycor
+    ifelse (random-float 1 < 0.5) [
+      set color 15
+    ][
+      set color 55
+    ]
   ]
   let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
   let just-added-turtle ((length turtle-list) - 1)
@@ -385,13 +397,18 @@ to resize-nodes
   ]
 end
 
-to add-node-preferential-attachment-barbási-albert
+to add-node-preferential-attachment-barabási-albert
   create-turtles 1 [
     set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
     set size 1.5 ; here we set the size of the turtle
     ; if not specified, the color of the turtles will be random
     set xcor random-xcor
     set ycor random-ycor
+    ifelse (random-float 1 < 0.5) [
+      set color 15
+    ][
+      set color 55
+    ]
   ]
   let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
   let just-added-turtle ((length turtle-list) - 1)
@@ -405,6 +422,10 @@ to add-node-preferential-attachment-barbási-albert
   let extracted-rand (random-float 1)
   let i 0 ; first index in range [0, num-nodes-1]
   while [i < just-added-turtle][
+    if (acc-degrees = 0) [
+      make-edge (turtle just-added-turtle) (one-of turtles) "default"
+      stop
+    ]
     ask (turtle i) [set edge-prob-i ((count link-neighbors) / (acc-degrees))
     set edge-prob-acc (edge-prob-acc + edge-prob-i)]
     if (extracted-rand <= edge-prob-acc) [ ; here we generate a random-float in [0, 1), if it is lower than
@@ -631,23 +652,46 @@ to-report average-path-length
   report acc-path-lengths / num-paths
 end
 
+to-report turtle-color [the-turtle]
+  let reportable 15
+  ask the-turtle [set reportable color]
+  report reportable
+end
+
+to-report update-strategies [threshold]
+  let something-changed-flag False
+  ask turtles [
+    if (count my-links < threshold) [
+      set something-changed-flag True
+      ifelse (color = 15)[
+        set color 55
+      ][
+        set color 15
+      ]
+    ]
+  ]
+  report something-changed-flag
+end
+
 to-report public-goods
   let reportable-payoffs-list []
   let y-i-s []
   let selfish-collaborative-vector []
   let y-max-turtles 12
   let i 0
+  let something-changed update-strategies 2; we set 2 as the maximum degree for wich a turtle changes strategy
+  if (not something-changed) [report something-changed] ; if nothing has changed, we must stop the computation
   while [i < count turtles] [
-    ifelse ((random-float 1) < 0.5) [
-      set selfish-collaborative-vector lput "selfish" selfish-collaborative-vector
+    ifelse ((turtle-color turtle i) = 15) [
+      ;set selfish-collaborative-vector lput "selfish" selfish-collaborative-vector
       set y-i-s lput (random-float (y-max-turtles / 2)) y-i-s
     ][
-      set selfish-collaborative-vector lput "collaborative" selfish-collaborative-vector
+      ;set selfish-collaborative-vector lput "collaborative" selfish-collaborative-vector
       set y-i-s lput ((random-float (y-max-turtles / 2)) + (y-max-turtles / 2)) y-i-s
     ]
     set i i + 1
   ]
-  set reportable-payoffs-list (get-payoffs-list y-i-s selfish-collaborative-vector y-max-turtles)
+  set reportable-payoffs-list (get-payoffs-list y-i-s y-max-turtles)
   report reportable-payoffs-list
 end
 
@@ -666,16 +710,15 @@ to-report sum-neigh-payoffs [l-where-sum idx]
   report reportable
 end
 
-to-report get-payoffs-list [y-i-s selfish-collaborative-vector y-max-turtles]
+to-report get-payoffs-list [y-i-s y-max-turtles]
   let reportable-payoffs-list []
-
-  let b-selfish 0.9
-  let b-collaborative 1.1
+  let b-selfish 0.7
+  let b-collaborative 1.3
   let i 0
   while [i < count turtles]
   [
     let current-payoff 0
-    ifelse (item i selfish-collaborative-vector) = "selfish" [
+    ifelse ((turtle-color turtle i) = 15) [
       set current-payoff ((y-max-turtles - (item i y-i-s)) + b-selfish * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
     ][
       set current-payoff ((y-max-turtles - (item i y-i-s)) + b-collaborative * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
@@ -746,16 +789,15 @@ to gossip-about-public-goods [payoff-list num-to-keep]
     ]
     set i i + 1
   ]
-  print payoff-list
-  print hashtable
-  print gossip-node-1
-  print new-other-ends-1
-  print gossip-node-2
-  print new-other-ends-2
 
   ; destroy previous links of the gossiping nodes
-  ask gossip-node-1 [ask my-links [die]]
-  ask gossip-node-2 [ask my-links [die]]
+  ask gossip-node-1 [ask my-links [if (random-float 1 < 0.6) [die]]] ; if we simply remove all the links as if we
+                                                                     ; were using the standard newscast, it is very likely
+                                                                     ; that we go on forever playing the game, adding some
+                                                                     ; links and removing them, instead we would like to add
+                                                                     ; new edges according to the outcome of the gossip while keeping
+                                                                     ; some other links
+  ask gossip-node-2 [ask my-links [if (random-float 1 < 0.6) [die]]]
 
   ; create the links with those new-other-ends
   set i 0
@@ -769,14 +811,28 @@ to gossip-about-public-goods [payoff-list num-to-keep]
     make-edge gossip-node-2 (item i new-other-ends-2) "default"
     set i i + 1
   ]
-
+  tick
 end
 
+to gossip-about-goods-dynamics
+  let payoff-list public-goods
+  if (payoff-list = False) [stop] ; if nothing has changed, then we stop
+  gossip-about-public-goods payoff-list 5
+end
 
+to-report selfish-nodes
+  let reportable 0
+  let i 0
+  while [i < count turtles] [
+    ask turtle i [if color = 15 [set reportable (reportable + 1)]]
+    set i i + 1
+  ]
+  report reportable
+end
 
-
-
-
+to-report collaborative-nodes
+  report (count turtles - selfish-nodes)
+end
 
 
 
@@ -840,7 +896,7 @@ edge-probability
 edge-probability
 0
 1
-0.24
+0.05
 0.01
 1
 NIL
@@ -999,7 +1055,7 @@ INPUTBOX
 164
 70
 starting-num-nodes
-4.0
+100.0
 1
 0
 Number
@@ -1018,10 +1074,10 @@ count turtles
 BUTTON
 193
 145
-327
+366
 178
-add-node-barbási-albert
-add-node-preferential-attachment-barbási-albert
+add-node-barabási-albert
+add-node-preferential-attachment-barabási-albert
 T
 1
 T
@@ -1067,6 +1123,45 @@ false
 "" ""
 PENS
 "default" 1.0 1 -16777216 true "" "let max-ff max get-mean-ff-list\nlet min-ff min get-mean-ff-list\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-ff (max-ff + 1)  ;; + 1 to make room for the width of the last bar\nhistogram get-mean-ff-list"
+
+BUTTON
+193
+183
+349
+216
+public-goods-dynamics
+gossip-about-goods-dynamics
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1017
+11
+1102
+56
+selfish nodes
+selfish-nodes
+17
+1
+11
+
+MONITOR
+1103
+11
+1223
+56
+collaborative nodes
+collaborative-nodes
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
