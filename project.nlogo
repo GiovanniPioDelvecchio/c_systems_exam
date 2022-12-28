@@ -1,3 +1,48 @@
+globals [hashtable]
+
+to add [key value]
+  ; Add an element to the hashtable
+  set hashtable lput (list key value) hashtable
+end
+
+to-report get [key]
+  ; Get the value associated with a given key in the hashtable
+  let value false
+  let index 0
+  while [index < length hashtable] [
+    let current-element item index hashtable
+    if (first current-element = key) [
+      set value last current-element
+    ]
+    set index index + 1
+  ]
+  report value
+end
+
+to selection-sort-hashtable
+  ; Sort the elements in the hashtable using selection sort
+  let index 0
+  while [index < length hashtable - 1] [
+    let max-index index
+    let max-value item max-index hashtable
+    let j index + 1
+    while [j < length hashtable] [
+      let current-value item j hashtable
+      if (last current-value > last max-value) [
+        set max-index j
+        set max-value current-value
+      ]
+      set j j + 1
+    ]
+    if (max-index != index) [
+      let temp item index hashtable
+      set hashtable replace-item index hashtable max-value
+      set hashtable replace-item max-index hashtable temp
+    ]
+    set index index + 1
+  ]
+end
+
 ; a quick function to pad nodes, we just don't want them along the border of the view
 to fix-positions [distance-from-borders reposition-magnitude]
   ask turtles [
@@ -17,6 +62,7 @@ end
 ; represented visually in the NetLogo plotting view when we press a button
 ; calling this function
 to setup
+  set hashtable []
   ca ;short for clear all
   crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
                     ; while in the brackets it is possible to specify characteristics (attributes) of
@@ -492,6 +538,21 @@ to-report argmin [list-to-check]
   report idx-to-rep
 end
 
+to-report argmax [list-to-check]
+  let i 1
+  if empty? list-to-check [report False]
+  let max-val (item 0 list-to-check)
+  let idx-to-rep 0
+  while [i < length list-to-check] [
+    if (item i list-to-check > max-val) [
+      set max-val (item i list-to-check)
+      set idx-to-rep i
+    ]
+    set i i + 1
+  ]
+  report idx-to-rep
+end
+
 to-report keep-turtle-related [dist-list turtle-list]
   let to-rep []
   let i 0
@@ -634,8 +695,96 @@ to-report get-neigh-payoffs [curr-node payoff-list]
     set reportable lput (item (convert-turtle-to-id item i neighs) payoff-list) reportable
     set i i + 1
   ]
+  set reportable lput (item (convert-turtle-to-id curr-node) payoff-list) reportable
   report reportable
 end
+
+to gossip-about-public-goods [payoff-list num-to-keep]
+  set hashtable []
+  let gossip-node-1 (turtle (random length payoff-list))
+  let gossip-node-2 (turtle (random length payoff-list))
+  while [gossip-node-2 = gossip-node-1] [
+    set gossip-node-2 (turtle (random length payoff-list))
+  ]
+  let neighs-1 []
+  let neighs-2 []
+  ask gossip-node-1 [set neighs-1 sort link-neighbors]
+  set neighs-1 lput gossip-node-1 neighs-1
+  ask gossip-node-2 [set neighs-2 sort link-neighbors]
+  set neighs-2 lput gossip-node-2 neighs-2
+  let neighs-payoffs-1 (get-neigh-payoffs gossip-node-1 payoff-list)
+  let neighs-payoffs-2 (get-neigh-payoffs gossip-node-2 payoff-list)
+  let new-other-ends-1 []
+  let new-other-ends-2 []
+  let i 0
+  ; add elements to the hashtable
+  while [i < (length neighs-payoffs-1)] [
+    add (item i neighs-1) (item i neighs-payoffs-1)
+    set i i + 1
+  ]
+  set i 0
+  while [i < (length neighs-payoffs-2)] [
+    if not member? (list (item i neighs-2) (item i neighs-payoffs-2)) hashtable [
+      add (item i neighs-2) (item i neighs-payoffs-2)
+    ]
+    set i i + 1
+  ]
+  ; sort the hashtable in descending order of payoffs
+  selection-sort-hashtable
+  ; add the turtles with the highest payoff to the new-other-end lists
+  set i 0
+  while [i < length hashtable] [
+    if length new-other-ends-1 < num-to-keep [
+      if (first item i hashtable) != gossip-node-1 [
+        set new-other-ends-1 lput (first item i hashtable) new-other-ends-1
+      ]
+    ]
+    if length new-other-ends-2 < num-to-keep [
+      if (first item i hashtable) != gossip-node-2 [
+        set new-other-ends-2 lput (first item i hashtable) new-other-ends-2
+      ]
+    ]
+    set i i + 1
+  ]
+  print payoff-list
+  print hashtable
+  print gossip-node-1
+  print new-other-ends-1
+  print gossip-node-2
+  print new-other-ends-2
+
+  ; destroy previous links of the gossiping nodes
+  ask gossip-node-1 [ask my-links [die]]
+  ask gossip-node-2 [ask my-links [die]]
+
+  ; create the links with those new-other-ends
+  set i 0
+  while [i < length new-other-ends-1] [
+    make-edge gossip-node-1 (item i new-other-ends-1) "default"
+    set i i + 1
+  ]
+  ; same must be done for the second gossip node
+  set i 0
+  while [i < length new-other-ends-2] [
+    make-edge gossip-node-2 (item i new-other-ends-2) "default"
+    set i i + 1
+  ]
+
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @#$#@#$#@
 GRAPHICS-WINDOW
