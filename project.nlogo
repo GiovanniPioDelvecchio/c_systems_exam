@@ -1,16 +1,20 @@
-globals [hashtable]
+globals [
+  hashtable
+  y-i-s
+]
 
-to add [key value]
+to-report add [the-hashtable key value]
   ; Add an element to the hashtable
-  set hashtable lput (list key value) hashtable
+  set the-hashtable lput (list key value) the-hashtable
+  report the-hashtable
 end
 
-to-report get [key]
+to-report get [the-hashtable key]
   ; Get the value associated with a given key in the hashtable
   let value false
   let index 0
-  while [index < length hashtable] [
-    let current-element item index hashtable
+  while [index < length the-hashtable] [
+    let current-element item index the-hashtable
     if (first current-element = key) [
       set value last current-element
     ]
@@ -19,15 +23,15 @@ to-report get [key]
   report value
 end
 
-to selection-sort-hashtable
+to-report selection-sort-hashtable [the-hashtable]
   ; Sort the elements in the hashtable using selection sort
   let index 0
-  while [index < length hashtable - 1] [
+  while [index < length the-hashtable - 1] [
     let max-index index
-    let max-value item max-index hashtable
+    let max-value item max-index the-hashtable
     let j index + 1
-    while [j < length hashtable] [
-      let current-value item j hashtable
+    while [j < length the-hashtable] [
+      let current-value item j the-hashtable
       if (last current-value > last max-value) [
         set max-index j
         set max-value current-value
@@ -35,12 +39,13 @@ to selection-sort-hashtable
       set j j + 1
     ]
     if (max-index != index) [
-      let temp item index hashtable
-      set hashtable replace-item index hashtable max-value
-      set hashtable replace-item max-index hashtable temp
+      let temp item index the-hashtable
+      set the-hashtable replace-item index the-hashtable max-value
+      set the-hashtable replace-item max-index the-hashtable temp
     ]
     set index index + 1
   ]
+  report the-hashtable
 end
 
 ; a quick function to pad nodes, we just don't want them along the border of the view
@@ -63,6 +68,7 @@ end
 ; calling this function
 to setup
   set hashtable []
+  set y-i-s []
   ca ;short for clear all
   crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
                     ; while in the brackets it is possible to specify characteristics (attributes) of
@@ -85,6 +91,96 @@ to setup
   ;layout-circle (sort turtles) max-pxcor - 1
   ;wire-lattice
   add-edges
+  reset-ticks
+end
+
+to setup-Erdrős-Rényi
+  set hashtable []
+  set y-i-s []
+  ca ;short for clear all
+  crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
+                    ; while in the brackets it is possible to specify characteristics (attributes) of
+                    ; these turtles
+    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+
+    set xcor random-xcor ; here we set the xposition of each turtle to be random in the range [min-pxcor, max-pxcor]
+    set ycor random-ycor ; here we set the xposition of each turtle to be random in the range [min-pycor, max-pycor]
+    set size 1.5 ; here we set the size of the turtle
+    ; if not specified, the color of the turtles will be random
+  ]
+  if public-goods-flag [
+    ask turtles [
+      ifelse ((random-float 1) < 0.5) [
+        set color 55 ; since the simulation is about checking whether a turtle will be cooperative ("green")
+      ][
+        set color 15 ; or selfish ("red")
+      ]
+    ]
+  ]
+  add-edges
+  reset-ticks
+end
+
+to setup-Barabási-Albert
+  reset-ticks
+  set hashtable []
+  set y-i-s []
+  ca ;short for clear all
+  if starting-num-nodes > 2 [
+    crt 2 [
+      set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+
+      set xcor random-xcor ; here we set the xposition of each turtle to be random in the range [min-pxcor, max-pxcor]
+      set ycor random-ycor ; here we set the xposition of each turtle to be random in the range [min-pycor, max-pycor]
+      set size 1.5 ; here we set the size of the turtle
+                   ; if not specified, the color of the turtles will be random
+    ]
+  ]
+  make-edge turtle 0 turtle 1 "default"
+  let i 2
+  while [i < starting-num-nodes]
+  [
+    add-node-preferential-attachment-barabási-albert
+    set i i + 1
+  ]
+
+  if public-goods-flag [
+    ask turtles [
+      ifelse ((random-float 1) < 0.5) [
+        set color 55 ; since the simulation is about checking whether a turtle will be cooperative ("green")
+      ][
+        set color 15 ; or selfish ("red")
+      ]
+    ]
+  ]
+  reset-ticks
+end
+
+to setup-Watts-Strogatz
+  set hashtable []
+  set y-i-s []
+  ca ;short for clear all
+  crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
+                    ; while in the brackets it is possible to specify characteristics (attributes) of
+                    ; these turtles
+    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+
+    set xcor random-xcor ; here we set the xposition of each turtle to be random in the range [min-pxcor, max-pxcor]
+    set ycor random-ycor ; here we set the xposition of each turtle to be random in the range [min-pycor, max-pycor]
+    set size 1.5 ; here we set the size of the turtle
+    ; if not specified, the color of the turtles will be random
+  ]
+  if public-goods-flag [
+    ask turtles [
+      ifelse ((random-float 1) < 0.5) [
+        set color 55 ; since the simulation is about checking whether a turtle will be cooperative ("green")
+      ][
+        set color 15 ; or selfish ("red")
+      ]
+    ]
+  ]
+  layout-circle (sort turtles) max-pxcor - 1
+  wire-lattice
   reset-ticks
 end
 
@@ -284,11 +380,9 @@ end
 
 to-report link? [node-A node-B]
   let reportable False
-  ifelse ((is-turtle? node-A) and (is-turtle? node-B))
-  [ask node-A [set reportable (member? node-B link-neighbors)]
-   ask node-B [set reportable (reportable or (member? node-B link-neighbors))]
-  ]
-  [set reportable ((is-link? (link node-A node-B)) or (is-link? (link node-B node-A)))]
+  if not is-turtle? node-A [set node-A turtle node-A]
+  if not is-turtle? node-B [set node-B turtle node-B]
+  ask node-A [if (member? node-B (sort my-links)) [set reportable True]]
   report reportable
 end
 
@@ -404,10 +498,12 @@ to add-node-preferential-attachment-barabási-albert
     ; if not specified, the color of the turtles will be random
     set xcor random-xcor
     set ycor random-ycor
-    ifelse (random-float 1 < 0.5) [
-      set color 15
-    ][
-      set color 55
+    if public-goods-flag [
+      ifelse (random-float 1 < 0.5) [
+        set color 15
+      ][
+        set color 55
+      ]
     ]
   ]
   let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
@@ -436,7 +532,7 @@ to add-node-preferential-attachment-barabási-albert
     ]
     set i (i + 1)
   ]
-  tick
+  ;tick
 end
 
 to-report connected-component [starting-turtle]
@@ -673,25 +769,38 @@ to-report update-strategies [threshold]
   report something-changed-flag
 end
 
-to-report public-goods
-  let reportable-payoffs-list []
-  let y-i-s []
-  let selfish-collaborative-vector []
-  let y-max-turtles 12
+to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
+  set prev-y-i-s []
+  let fixed-for-collabs (random-float (y-max-turtles / 2)) + (y-max-turtles / 2) ; collaborators will all contribute
+                                                                                 ; a fixed amount of money wich is more than half of y-max-turtles,
+                                                                                 ; selected at random
   let i 0
-  let something-changed update-strategies 2; we set 2 as the maximum degree for wich a turtle changes strategy
-  if (not something-changed) [report something-changed] ; if nothing has changed, we must stop the computation
   while [i < count turtles] [
     ifelse ((turtle-color turtle i) = 15) [
-      ;set selfish-collaborative-vector lput "selfish" selfish-collaborative-vector
-      set y-i-s lput (random-float (y-max-turtles / 2)) y-i-s
+      ifelse ((random-float 1 < 0.5)) [
+        set prev-y-i-s lput (random-float (y-max-turtles)) prev-y-i-s ; those who abstain will decide to contribute with
+                                                                    ; a random amount in the range [0, y-max-turtles] or not to contribute at all
+      ][
+        set prev-y-i-s lput 0 prev-y-i-s
+      ]
     ][
-      ;set selfish-collaborative-vector lput "collaborative" selfish-collaborative-vector
-      set y-i-s lput ((random-float (y-max-turtles / 2)) + (y-max-turtles / 2)) y-i-s
+      set prev-y-i-s lput (fixed-for-collabs) prev-y-i-s
     ]
     set i i + 1
   ]
-  set reportable-payoffs-list (get-payoffs-list y-i-s y-max-turtles)
+
+  print prev-y-i-s
+  report prev-y-i-s
+end
+
+to-report public-goods
+  let reportable-payoffs-list []
+  let selfish-collaborative-vector []
+  let y-max-turtles 12
+  let something-changed update-strategies 2; we set 2 as the maximum degree for wich a turtle changes strategy
+  if (not something-changed) [report something-changed] ; if nothing has changed, we must stop the computation
+  set y-i-s initialize-y-i-s y-i-s y-max-turtles
+  set reportable-payoffs-list (get-payoffs-list y-max-turtles)
   report reportable-payoffs-list
 end
 
@@ -710,16 +819,16 @@ to-report sum-neigh-payoffs [l-where-sum idx]
   report reportable
 end
 
-to-report get-payoffs-list [y-i-s y-max-turtles]
+to-report get-payoffs-list [y-max-turtles]
   let reportable-payoffs-list []
-  let b-selfish 0.7
+  let b-abstain 0.7
   let b-collaborative 1.3
   let i 0
   while [i < count turtles]
   [
     let current-payoff 0
     ifelse ((turtle-color turtle i) = 15) [
-      set current-payoff ((y-max-turtles - (item i y-i-s)) + b-selfish * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
+      set current-payoff ((y-max-turtles - (item i y-i-s)) + b-abstain * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
     ][
       set current-payoff ((y-max-turtles - (item i y-i-s)) + b-collaborative * ((item i y-i-s) + (sum-neigh-payoffs y-i-s i)))
     ]
@@ -743,9 +852,14 @@ to-report get-neigh-payoffs [curr-node payoff-list]
 end
 
 to gossip-about-public-goods [payoff-list num-to-keep]
-  set hashtable []
   let gossip-node-1 (turtle (random length payoff-list))
   let gossip-node-2 (turtle (random length payoff-list))
+  if (hashtable != [] and hashtable != 0) [
+    set gossip-node-1 first (item (length hashtable - 1) hashtable)
+  ;  set gossip-node-2 first (item (length hashtable - 2) hashtable)
+  ]
+
+  set hashtable []
   while [gossip-node-2 = gossip-node-1] [
     set gossip-node-2 (turtle (random length payoff-list))
   ]
@@ -762,18 +876,18 @@ to gossip-about-public-goods [payoff-list num-to-keep]
   let i 0
   ; add elements to the hashtable
   while [i < (length neighs-payoffs-1)] [
-    add (item i neighs-1) (item i neighs-payoffs-1)
+    set hashtable add hashtable (item i neighs-1) (item i neighs-payoffs-1)
     set i i + 1
   ]
   set i 0
   while [i < (length neighs-payoffs-2)] [
     if not member? (list (item i neighs-2) (item i neighs-payoffs-2)) hashtable [
-      add (item i neighs-2) (item i neighs-payoffs-2)
+      set hashtable add hashtable (item i neighs-2) (item i neighs-payoffs-2)
     ]
     set i i + 1
   ]
   ; sort the hashtable in descending order of payoffs
-  selection-sort-hashtable
+  set hashtable selection-sort-hashtable hashtable
   ; add the turtles with the highest payoff to the new-other-end lists
   set i 0
   while [i < length hashtable] [
@@ -790,14 +904,7 @@ to gossip-about-public-goods [payoff-list num-to-keep]
     set i i + 1
   ]
 
-  ; destroy previous links of the gossiping nodes
-  ask gossip-node-1 [ask my-links [if (random-float 1 < 0.6) [die]]] ; if we simply remove all the links as if we
-                                                                     ; were using the standard newscast, it is very likely
-                                                                     ; that we go on forever playing the game, adding some
-                                                                     ; links and removing them, instead we would like to add
-                                                                     ; new edges according to the outcome of the gossip while keeping
-                                                                     ; some other links
-  ask gossip-node-2 [ask my-links [if (random-float 1 < 0.6) [die]]]
+
 
   ; create the links with those new-other-ends
   set i 0
@@ -811,6 +918,105 @@ to gossip-about-public-goods [payoff-list num-to-keep]
     make-edge gossip-node-2 (item i new-other-ends-2) "default"
     set i i + 1
   ]
+
+  ; destroy previous links of the gossiping nodes
+  ask gossip-node-1 [ask my-links [if (random-float 1 < 0.6) [die]]] ; if we simply remove all the links as if we
+                                                                     ; were using the standard newscast, it is very likely
+                                                                     ; that we go on forever playing the game, adding some
+                                                                     ; links and removing them, instead we would like to add
+                                                                     ; new edges according to the outcome of the gossip while keeping
+                                                                     ; some other links
+  ask gossip-node-2 [ask my-links [if (random-float 1 < 0.6) [die]]]
+
+  tick
+end
+
+to update-payoffs-hash [payoff-list gossiping-turtles]
+  set hashtable []
+  let current-neighs []
+  let i 0
+  while [i < length gossiping-turtles] [
+    let current-pair (list (item i gossiping-turtles) (item (convert-turtle-to-id (item i gossiping-turtles)) payoff-list))
+    if (not member? current-pair hashtable) [
+      set hashtable add hashtable (first current-pair) (last current-pair)
+    ]
+    ask (item i gossiping-turtles) [
+      set current-neighs (sort link-neighbors)
+    ]
+    let neighs-payoffs (get-neigh-payoffs (item i gossiping-turtles) payoff-list)
+    let j 0
+    while [j < length current-neighs] [
+      if (not member? (list (item j current-neighs) (item j neighs-payoffs)) hashtable) [
+        set hashtable add hashtable (item j current-neighs) (item j neighs-payoffs)
+      ]
+      set j j + 1
+    ]
+    set i i + 1
+  ]
+  set hashtable selection-sort-hashtable hashtable
+end
+
+to-report get-n-lowest-payoff [payoff-list n-nodes-gossiping]
+  let gossiping-turtles []
+  let temp-nodes (sort turtles)
+  let temp-payoff-list payoff-list
+  let i 0
+  while [i < n-nodes-gossiping] [
+    let current-min-index argmin temp-payoff-list
+    let to-add (item current-min-index temp-nodes)
+    set temp-nodes remove-item current-min-index temp-nodes
+    set temp-payoff-list remove-item current-min-index temp-payoff-list
+    set gossiping-turtles lput to-add gossiping-turtles ; we consider the n-nodes-gossiping turtles
+                                                        ; that have the lowest score
+    set i i + 1
+  ]
+  report gossiping-turtles
+end
+
+to-report rescale-with-respect-to-degree [the-hashtable the-turtle]
+  ; this function rescales the hashtable containing the payoffs of the neighbors of the considered nodes
+  ; with respect to the degree of the-turtle and the degree of his neighbors
+  let new-hash the-hashtable
+  let turt-deg 1e-3
+  ask the-turtle [if count my-links > 0 [set turt-deg count my-links]]
+  let i 0
+  while [i < length new-hash][
+    let deg-hash-i 1e-3
+    ask (first (item i new-hash)) [if (count my-links > 0)[set deg-hash-i count my-links]]
+    let to-place (list (first (item i new-hash)) ((last (item i new-hash)) * (turt-deg / deg-hash-i)) )
+    set new-hash replace-item i new-hash to-place
+    set i i + 1
+  ]
+  set new-hash selection-sort-hashtable new-hash
+  report new-hash
+end
+
+to gossip-about-public-goods-2 [payoff-list num-to-keep n-nodes-gossiping]
+  let gossiping-nodes (get-n-lowest-payoff payoff-list n-nodes-gossiping)
+  update-payoffs-hash payoff-list gossiping-nodes
+  let i 0
+  while [i < length gossiping-nodes] [
+    ask (item i gossiping-nodes) [ask my-links [if ((random-float 1) < 0.8) [die]]]
+    let rescaled-hash rescale-with-respect-to-degree hashtable (item i gossiping-nodes)
+    let j 0
+    while [j < num-to-keep] [
+      ifelse length rescaled-hash - j > 0 [
+        if first (item j rescaled-hash) != (item i gossiping-nodes)[
+          if (random-float 1 < 0.8) [
+            make-edge (item i gossiping-nodes) (first (item j rescaled-hash)) "default"
+          ]
+        ]
+      ][
+        if (random-float 1 < 0.5) [
+          let diff-turtle turtle (random count turtles) ; if the rescaled hashtable is too small we add a random edge
+          while [(item i gossiping-nodes) = diff-turtle] [set diff-turtle turtle (random count turtles)]
+          make-edge (item i gossiping-nodes) diff-turtle "default"
+        ]
+      ]
+      set j j + 1
+    ]
+    set i i + 1
+  ]
   tick
 end
 
@@ -820,12 +1026,23 @@ to gossip-about-goods-dynamics
   gossip-about-public-goods payoff-list 5
 end
 
+to gossip-about-goods-dynamics-2
+  if public-goods-flag [
+    let payoff-list public-goods
+    if (payoff-list = False) [stop]
+    gossip-about-public-goods-2 payoff-list 3 10
+  ]
+end
+
+
 to-report selfish-nodes
   let reportable 0
   let i 0
-  while [i < count turtles] [
-    ask turtle i [if color = 15 [set reportable (reportable + 1)]]
-    set i i + 1
+  if y-i-s != [] [
+    while [i < count turtles] [
+      if (item i y-i-s) = 0 [set reportable (reportable + 1)]
+      set i i + 1
+    ]
   ]
   report reportable
 end
@@ -834,7 +1051,143 @@ to-report collaborative-nodes
   report (count turtles - selfish-nodes)
 end
 
+to-report generate-random-vector [dimension]
+  let reportable []
+  let i 0
+  while [i < dimension]
+  [
+    set reportable lput (random 2) reportable
+    set i i + 1
+  ]
+  report reportable
+end
 
+to-report l2-norm [the-vector]
+  let reportable 0
+  let i 0
+  while [i < length the-vector][
+    set reportable (reportable + ((item i the-vector) ^ 2))
+    set i i + 1
+  ]
+  report (sqrt reportable)
+end
+
+to-report dot-product [vec-1 vec-2]
+  let reportable 0
+  if length vec-1 != length vec-2 [
+    print "The two vectors have different shape"
+    report reportable
+  ]
+  let i 0
+  while [i < length vec-1]
+  [
+    set reportable (reportable + ((item i vec-1) * (item i vec-2)))
+    set i i + 1
+  ]
+  report reportable
+end
+
+to-report cosine-similarity [vec-1 vec-2]
+  let reportable 0
+  if length vec-1 != length vec-2 [
+    print "The two vectors have different shape"
+    report reportable
+  ]
+  set reportable (dot-product vec-1 vec-2) / (((l2-norm vec-1) * (l2-norm vec-2)) + 1e-6) ; we want to avoid division by 0
+  report reportable
+end
+
+to-report lowest-degree-nodes [num-lowest]
+  let reportable []
+  let supp-hash []
+  let i 0
+  while [i < count turtles] [
+    let curr-deg 0
+    ask turtle i [set curr-deg count my-links]
+    set supp-hash add supp-hash (turtle i) (curr-deg)
+    set i i + 1
+  ]
+  ;print supp-hash
+  set supp-hash selection-sort-hashtable supp-hash
+  let lhash (length supp-hash)
+  set i 0
+  while [i < num-lowest] [
+    set reportable lput (first (item (lhash - i - 1) supp-hash)) reportable
+    set i i + 1
+  ]
+  report reportable
+end
+
+to update-chromosomes [num-to-replace mutation-probability]
+  let vec-size 5
+  ifelse hashtable = [] or hashtable = 0 [
+    set hashtable []
+    let i 0
+    while [i < count turtles]
+    [
+      set hashtable add hashtable (turtle i) (generate-random-vector vec-size)
+      set i i + 1
+    ]
+  ][
+    if num-to-replace > length hashtable [
+      print "There are more chromosomes than nodes"
+      stop
+    ]
+    let nodes-to-replace lowest-degree-nodes num-to-replace
+    ;print nodes-to-replace
+    let i 0
+    while [i < num-to-replace] [
+      let to-change (convert-turtle-to-id (item i nodes-to-replace))
+      set hashtable replace-item to-change hashtable (list (turtle to-change) (generate-random-vector vec-size))
+      set i i + 1
+    ]
+    let lhash (length hashtable)
+    set i 0
+    while [i < lhash] [
+      if (random-float 1 < mutation-probability) [
+        let modified-vec (get hashtable (turtle i))
+        let gene-to-flip (random vec-size)
+        let updated-gene 0
+        if (item gene-to-flip modified-vec) = 0 [set updated-gene 1]
+        set modified-vec replace-item gene-to-flip modified-vec updated-gene
+        set hashtable replace-item i hashtable (list (turtle i) modified-vec)
+      ]
+      set i i + 1
+    ]
+  ]
+end
+
+to update-links-according-to-genetics [num-new-links drop-links-prob]
+  let sim-hash []
+  let i 0
+  while [i < count turtles] [
+    set sim-hash []
+    let j 0
+    while [j < count turtles] [
+      if i != j [
+        set sim-hash add sim-hash (turtle j) (cosine-similarity (last item i hashtable) (last item j hashtable))
+      ]
+      set sim-hash rescale-with-respect-to-degree sim-hash (turtle i)
+      set j j + 1
+    ]
+    set j 0
+    while [j < num-new-links] [
+      make-edge (turtle i) (first item j sim-hash) "default"
+      set j j + 1
+    ]
+    ask (turtle i) [ask my-links [if (random-float 1 < drop-links-prob) [die]]]
+    set i i + 1
+  ]
+  tick
+end
+
+to genetic-dynamics
+  update-chromosomes (floor ((count turtles) * 10 / 100)) 0.2
+  let min-deg 0
+  ask (item 0 (lowest-degree-nodes 1)) [set min-deg (count my-links)]
+  if min-deg > 2 [stop] ;this generated an error
+  update-links-according-to-genetics 4 0.6
+end
 
 
 
@@ -870,33 +1223,16 @@ GRAPHICS-WINDOW
 ticks
 30.0
 
-BUTTON
-9
-70
-72
-103
-NIL
-setup
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
-73
-70
-245
-103
+129
+81
+301
+114
 edge-probability
 edge-probability
 0
 1
-0.05
+0.01
 0.01
 1
 NIL
@@ -953,10 +1289,10 @@ clustering-coefficient
 11
 
 INPUTBOX
-165
-10
-320
-70
+129
+114
+284
+174
 watts-stogatz-k
 2.0
 1
@@ -964,30 +1300,13 @@ watts-stogatz-k
 Number
 
 BUTTON
-7
-183
-173
-216
+3
+293
+169
+326
 NIL
 simple-random-dynamics
 T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-7
-145
-189
-178
-NIL
-add-node-uniform-random
-NIL
 1
 T
 OBSERVER
@@ -1055,7 +1374,7 @@ INPUTBOX
 164
 70
 starting-num-nodes
-100.0
+50.0
 1
 0
 Number
@@ -1070,23 +1389,6 @@ count turtles
 17
 1
 11
-
-BUTTON
-193
-145
-366
-178
-add-node-barabási-albert
-add-node-preferential-attachment-barabási-albert
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 PLOT
 942
@@ -1125,12 +1427,12 @@ PENS
 "default" 1.0 1 -16777216 true "" "let max-ff max get-mean-ff-list\nlet min-ff min get-mean-ff-list\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-ff (max-ff + 1)  ;; + 1 to make room for the width of the last bar\nhistogram get-mean-ff-list"
 
 BUTTON
-193
-183
-349
-216
+3
+360
+159
+393
 public-goods-dynamics
-gossip-about-goods-dynamics
+gossip-about-goods-dynamics-2
 T
 1
 T
@@ -1162,6 +1464,85 @@ collaborative-nodes
 17
 1
 11
+
+BUTTON
+302
+81
+452
+114
+Erdrős Rényi baseline
+setup-Erdrős-Rényi
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SWITCH
+3
+326
+153
+359
+public-goods-flag
+public-goods-flag
+0
+1
+-1000
+
+BUTTON
+288
+46
+452
+79
+Barabási Albert baseline
+setup-Barabási-Albert
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+288
+115
+452
+148
+Watts Strogatz baseline
+setup-Watts-Strogatz
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+4
+394
+131
+427
+genetic-dynamics
+genetic-dynamics
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
