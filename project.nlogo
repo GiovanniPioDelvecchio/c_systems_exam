@@ -1,14 +1,33 @@
 globals [
-  hashtable
-  y-i-s
+  hashtable ; this is an hashtable used to quickly store partial results,
+            ; it has been placed here because it makes debugging easier
+  y-i-s     ; a list needed for the game theory approach, containing the contributions
+            ; of each turtle, again it is a global variable for debugging reasons
+  num-removed ; number of removed nodes, this is needed in order to plot the statistics
+              ; about the robustness of the network
+  plot-rob-flag ; this is a flag needed to start the plot about the robustness at a fixed time
+                ; since those plots require functions that are computationally expensive
 ]
 
+; utility to add an entry to the hashtables, each hastable is defined as a list of
+; pairs [key value].
+; Note well: we can add entries with the same key but different values,
+; thus we must be careful while adding a new entry
+; param: the-hashtable, is the hashtable in which we want to add an entry
+; param: key, is the key of the pair that we want to add
+; param: value, is the value of the pair that we want to add
+; report: the-hashtable, is the hashtable that we passed as input but with the new entry appended
 to-report add [the-hashtable key value]
   ; Add an element to the hashtable
   set the-hashtable lput (list key value) the-hashtable
   report the-hashtable
 end
 
+; utility needed to access the hastables, given a key it returns the value.
+; param: the-hashtable, is the hashtable in which we want to find the entry
+;                       that has key as its key
+; param: key, is the key for which we want to find the value
+; report: value, is the value associated to key in the-hashtable
 to-report get [the-hashtable key]
   ; Get the value associated with a given key in the hashtable
   let value false
@@ -23,6 +42,13 @@ to-report get [the-hashtable key]
   report value
 end
 
+
+; implementation of the selection sort algorithm for hashtables,
+; given a hashtable it returns the same hashtable but with the
+; entries ordered in descending order. The value must be a number
+; since we are using ">" as ordering relationship.
+; param: the-hashtable, is the hashtable that we want to order
+; report: the-hashtable, is the ordered hashtable
 to-report selection-sort-hashtable [the-hashtable]
   ; Sort the elements in the hashtable using selection sort
   let index 0
@@ -48,7 +74,10 @@ to-report selection-sort-hashtable [the-hashtable]
   report the-hashtable
 end
 
-; a quick function to pad nodes, we just don't want them along the border of the view
+; a quick function to pad nodes, if we just don't want them along the border of the view
+; param: distance-from-borders, is the value for which nodes are too close to the border
+; param: reposition-magnitude, a value representing how much we have to place turtles towards
+;                              the center
 to fix-positions [distance-from-borders reposition-magnitude]
   ask turtles [
     if abs(pxcor - min-pxcor) < distance-from-borders [setxy pxcor + reposition-magnitude pycor]
@@ -58,45 +87,22 @@ to fix-positions [distance-from-borders reposition-magnitude]
   ]
 end
 
-; we create a button with this name
+; a button with this name was created in order to pad nodes
 to pad-nodes
-  fix-positions 5 5 ; it just calls the above function with temporary constant values
+  fix-positions 5 5 ; it just calls the above function with constant values
 end
 
-; here's some code about how to make turtles, they are nodes in a graph
-; represented visually in the NetLogo plotting view when we press a button
-; calling this function
-to setup
-  set hashtable []
-  set y-i-s []
-  ca ;short for clear all
-  crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
-                    ; while in the brackets it is possible to specify characteristics (attributes) of
-                    ; these turtles
-    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
-
-    set xcor random-xcor ; here we set the xposition of each turtle to be random in the range [min-pxcor, max-pxcor]
-    set ycor random-ycor ; here we set the xposition of each turtle to be random in the range [min-pycor, max-pycor]
-    set size 1.5 ; here we set the size of the turtle
-    ; if not specified, the color of the turtles will be random
-  ]
-  ask turtles [
-    ifelse ((random-float 1) < 0.5) [
-      set color 55 ; since the simulation is about checking whether a turtle will be cooperative ("green")
-    ][
-      set color 15 ; or selfish ("red")
-    ]
-  ]
-  ;add-edges
-  ;layout-circle (sort turtles) max-pxcor - 1
-  ;wire-lattice
-  add-edges
-  reset-ticks
-end
-
+; this is the setup function for the Erdrős-Rényi model for random graphs.
+; When called by a button it generates a graph with starting-num-nodes nodes.
+; If we want to use the game theory approach we set the colors as either red or green.
+; Nodes are placed randomly in the view and edges are added through the procedure add-edges
 to setup-Erdrős-Rényi
+  ; initialization of the global variables
   set hashtable []
   set y-i-s []
+  set num-removed 0
+  set plot-rob-flag False
+
   ca ;short for clear all
   crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
                     ; while in the brackets it is possible to specify characteristics (attributes) of
@@ -121,10 +127,19 @@ to setup-Erdrős-Rényi
   reset-ticks
 end
 
+; this is the setup function for the Barabási-Albert model for graphs.
+; When called by a button it generates a graph with starting-num-nodes nodes.
+; If we want to use the game theory approach we set the colors as either red or green.
+; Nodes are placed randomly in the view but the view can be modified by the layout procedure,
+; for which there is the button "re-do layout". Edges are added through the procedure
+; add-node-preferential-attachment-barabási-albert, that implements preferential attachment
 to setup-Barabási-Albert
-  reset-ticks
+  ; initialization of the global variables
   set hashtable []
   set y-i-s []
+  set num-removed 0
+  set plot-rob-flag False
+
   ca ;short for clear all
   if starting-num-nodes > 2 [
     crt 2 [
@@ -156,9 +171,19 @@ to setup-Barabási-Albert
   reset-ticks
 end
 
+
+; this is the setup function for the Watts-Strogatz model for graphs.
+; When called by a button it generates a graph with starting-num-nodes nodes.
+; If we want to use the game theory approach we set the colors as either red or green.
+; Nodes are placed with the layout of a circle and edges are added through the procedure
+; wire-lattice, that creates a network where each node is connected to its watts-strogatz-k nearest neighbors
 to setup-Watts-Strogatz
+  ; initialization of the global variables
   set hashtable []
   set y-i-s []
+  set num-removed 0
+  set plot-rob-flag False
+
   ca ;short for clear all
   crt (starting-num-nodes) [ ; crt is short for create turtles, it takes as arguments in the parenthesis, "num-nodes" is an external integer parameter
                     ; while in the brackets it is possible to specify characteristics (attributes) of
@@ -188,7 +213,6 @@ end
 ; they resemble the Erdős-Rényi model, meaning that we
 ; add each of the possible n(n-1)/2 links between nodes with probability edge-probability, an external probability value
 to add-edges
-  ask links [set color grey set thickness 0] ; let us be stylish first, we want our links to have the same color so that it doesn't seem messy
   if not any? turtles [; if we have no turtles we cannot create links
     print "Set a number of nodes greater than 0 and press 'setup'" ; we report this as a console log
     stop
@@ -198,7 +222,7 @@ to add-edges
   ]
   let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
 
-  ;let max-edges = (num-nodes * (num-nodes - 1)) / 2
+  ; let max-edges = (num-nodes * (num-nodes - 1)) / 2
   ; we create two indexes needed to access the list of turtles as the
   ; upper triangular part of the adjacency matrix, whituout the diagonal
   ; since we cannot create a link from one node to itself
@@ -208,8 +232,7 @@ to add-edges
     while [j < i] [
       if (i != j) [
         if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
-                                                 ; the external parameter we add a link
-        ;ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles.
+                                                   ; the external parameter we add a link
           make-edge (turtle i) (turtle j) "default"
         ]
       ]
@@ -219,12 +242,17 @@ to add-edges
   ]
 end
 
+; function needed in order to get the average number of friends among all the turtles.
+; report: the average number of neighbors among the turtles
 to-report average-num-friends
   let acc 0
   ask turtles [set acc (acc + (length (sort my-links)))]
   report (acc / (count turtles))
 end
 
+; function needed in order to get the number of friends of friends of the turtle node-ff.
+; param: node-ff, is the turtle for which we want to know the number of friends of friends.
+; report: the number of friends of friends of node-ff
 to-report ff-for-single-node [node-ff]
   let acc 0
   let num-neigh 0
@@ -240,6 +268,9 @@ to-report ff-for-single-node [node-ff]
   report acc
 end
 
+; function needed in order to create the list of firends of friends of each turtle.
+; report: list-to-report, is a list containing the number of firends of friends of each turtle
+;                         (list-to-report[i]=number-ff of turtle i)
 to-report get-ff-list
   let list-to-report []
   let i 0
@@ -250,6 +281,9 @@ to-report get-ff-list
   report list-to-report
 end
 
+; function needed to compute the mean number of friends of friends for each turtle.
+; param: node-ff, is the node for which we want to compute the average number of friends of friends.
+; report: reportable, is the average number of friends of friends of the turtle node-ff
 to-report mean-ff-for-single-node [node-ff]
   let acc 0
   let num-neigh 0
@@ -262,9 +296,13 @@ to-report mean-ff-for-single-node [node-ff]
       ]
     ]
   ]
-  report acc / num-neigh
+  let reportable acc / num-neigh
+  report reportable
 end
 
+; function needed in order to create the list of mean firends of friends of each turtle.
+; report: list-to-report, is a list containing the mean number of firends of friends of each turtle
+;                         (list-to-report[i]=mean-number-ff of turtle i)
 to-report get-mean-ff-list
   let list-to-report []
   let i 0
@@ -275,22 +313,15 @@ to-report get-mean-ff-list
   report list-to-report
 end
 
-
-to-report average-num-ff-2
-  let acc 0
-  let i 0
-  while [i < count turtles] [
-    set acc (acc + ff-for-single-node (turtle i))
-    set i i + 1
-  ]
-  report acc / ((count links) * 2)
-end
-
+; function needed to compute the average of the mean number of friends of friends using the formula
+; provided in the specification: sum_i (x_i)^2/x_i, where x_i is the degree of node i.
+; report: reportable, is the mean number of friends of friends among all the turtles
 to-report average-num-ff
   let denom (average-num-friends * (count turtles))
   let acc 0
   ask turtles [set acc (acc + ((length (sort my-links))) ^ 2)]
-  report (acc / denom)
+  let reportable (acc / denom)
+  report reportable
 end
 
 
@@ -333,14 +364,14 @@ end
 
 to wire-lattice
   ; iterate over the turtles
-  if (watts-stogatz-k >= (count turtles)) [
+  if (watts-strogatz-k >= (count turtles)) [
     print "You need more nodes than neighbors to link"
     stop
   ]
   let n 0
   while [ n < count turtles ] [
     let j 1
-    while [j <= watts-stogatz-k] [
+    while [j <= watts-strogatz-k] [
       ;ifelse (j = 1) [
       ;  make-edge (turtle n) (turtle ((n + j) mod count turtles)) "default"]
       ;[make-edge (turtle n) (turtle ((n + j) mod count turtles)) "curve"]
@@ -355,11 +386,11 @@ to wire-lattice
   ; flipped by default. To avoid this, we used an inverse curved link shape
   ; ("curve-a") which makes all of the curves face the same direction.
   let j 0
-  while [j < watts-stogatz-k] [
+  while [j < watts-strogatz-k] [
     let k 0
-    while [k < watts-stogatz-k] [
-      if (link? j (count turtles - watts-stogatz-k + k)) [
-      ask link j (count turtles - watts-stogatz-k + k) [set shape "curve-a"]
+    while [k < watts-strogatz-k] [
+      if (link? j (count turtles - watts-strogatz-k + k)) [
+      ask link j (count turtles - watts-strogatz-k + k) [set shape "curve-a"]
       ]
       set k (k + 1)
     ]
@@ -566,20 +597,21 @@ to-report connected-component [starting-turtle]
 end
 
 to-report get-giant-component
-  ; I will start from index 1 because in the cycle we consider the other components
-  let i 1
   ; a security check, we can talk about components only if we have nodes
   if ((count turtles) < 1) [report []]
   ; here we consider the first component as the current one
-  let current-component (connected-component turtle 0)
+  let turtle-list sort turtles
+  let current-component (connected-component (first turtle-list))
   ; and set the variable needed to keep track of the cardinality of the component
   let max-size length current-component
   ; we set the component to report as the current one
   let node-list-to-report current-component
   ; for each node we consider its component, if it is larger than the current
   ; giant component we update both node-list-to-report and max-len
+  ; I will start from index 1 because in the cycle we consider the other components
+  let i 1
   while [i < count turtles] [
-    set current-component (connected-component turtle i)
+    set current-component (connected-component item i turtle-list)
     if (length current-component > max-size) [
       set max-size length current-component
       set node-list-to-report current-component
@@ -673,11 +705,25 @@ end
 to-report keep-turtle-related [dist-list turtle-list]
   let to-rep []
   let i 0
+  let l-of-t sort turtles
   while [i < length turtle-list] [
-    set to-rep lput (item (convert-turtle-to-id item i turtle-list) dist-list) to-rep
+    set to-rep lput (item (where-in-list (l-of-t) (item i turtle-list)) dist-list) to-rep;(item (convert-turtle-to-id item i turtle-list) dist-list) to-rep
     set i i + 1
   ]
   report to-rep
+end
+
+to-report where-in-list [where-check the-turtle]
+  let reportable 0
+  if where-check = [] [report False]
+  let i 0
+  while [i < length where-check] [
+    if item i where-check = the-turtle
+    [
+      report i
+    ]
+    set i i + 1
+  ]
 end
 
 ; variation of the Dijkstra's algorithm, since in NetLogo we don't really have primitives
@@ -686,19 +732,21 @@ end
 to-report shortest-path [source-t target-t]
   let distances []
   let previous []
+  let turtle-list sort turtles
   while [length distances < count turtles] [
     set distances lput 1.0E10 distances
     set previous lput -1 previous
   ]
 
   let unvisited sort turtles
-  set distances replace-item (convert-turtle-to-id source-t) distances 0
+  let source-t-idx-in-dist (where-in-list turtle-list source-t)
+  set distances replace-item (source-t-idx-in-dist) distances 0
   let current-node source-t
-
 
   while [not empty? unvisited] [
     set current-node (item (argmin keep-turtle-related distances unvisited) unvisited)
-    if (item (convert-turtle-to-id current-node) distances = 1.0E10) [
+    let curr-node-idx-in-dist (where-in-list turtle-list current-node)
+    if (item curr-node-idx-in-dist distances = 1.0E10) [
       report False
     ]
     if current-node = target-t [
@@ -709,10 +757,11 @@ to-report shortest-path [source-t target-t]
     ask current-node [
       ask my-links [
         ; relaxation (d[v]+c[v,u]<d[u]->update d[u])
-        let alt (item convert-turtle-to-id current-node distances) + 1
-        if alt < (item convert-turtle-to-id other-end distances) [
-          set distances replace-item (convert-turtle-to-id other-end) distances alt
-          set previous replace-item (convert-turtle-to-id other-end) previous current-node
+        let alt (item curr-node-idx-in-dist distances) + 1
+        let other-end-idx-in-dist (where-in-list turtle-list other-end)
+        if alt < (item other-end-idx-in-dist distances) [ ;
+          set distances replace-item (other-end-idx-in-dist) distances alt
+          set previous replace-item (other-end-idx-in-dist) previous current-node
         ]
       ]
     ]
@@ -720,8 +769,9 @@ to-report shortest-path [source-t target-t]
   let path []
   if current-node = target-t [
     while [current-node != -1][
+      let curr-node-idx-in-dist (where-in-list turtle-list current-node)
       set path lput current-node path
-      set current-node (item convert-turtle-to-id current-node previous)
+      set current-node (item curr-node-idx-in-dist previous)
     ]
     report path
   ]
@@ -731,21 +781,25 @@ to-report average-path-length
   let i 0
   let num-paths 0
   let acc-path-lengths 0
+  let turtle-list sort turtles
   while [i < count turtles]
   [
     let j 0
     while [j < i] [
-      let sp-ij (shortest-path (turtle i) (turtle j))
+      let sp-ij (shortest-path (item i turtle-list) (item j turtle-list))
       if sp-ij != False [
-        set acc-path-lengths acc-path-lengths + (length sp-ij)
+        set acc-path-lengths acc-path-lengths + ((length sp-ij) - 1)
         set num-paths num-paths + 1
-
       ]
       set j j + 1
     ]
     set i i + 1
   ]
-  report acc-path-lengths / num-paths
+  ifelse num-paths != 0 [
+    report acc-path-lengths / num-paths
+  ][
+    report 0
+  ]
 end
 
 to-report turtle-color [the-turtle]
@@ -788,8 +842,6 @@ to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
     ]
     set i i + 1
   ]
-
-  print prev-y-i-s
   report prev-y-i-s
 end
 
@@ -1107,7 +1159,6 @@ to-report lowest-degree-nodes [num-lowest]
     set supp-hash add supp-hash (turtle i) (curr-deg)
     set i i + 1
   ]
-  ;print supp-hash
   set supp-hash selection-sort-hashtable supp-hash
   let lhash (length supp-hash)
   set i 0
@@ -1189,17 +1240,23 @@ to genetic-dynamics
   update-links-according-to-genetics 4 0.6
 end
 
-
-
+to random-uniform-removal
+  if (count turtles > 1) [
+    set plot-rob-flag True
+    set num-removed (num-removed + 1)
+    ask (one-of turtles) [die]
+    tick
+  ]
+end
 
 
 
 
 @#$#@#$#@
 GRAPHICS-WINDOW
-452
+331
 10
-941
+820
 500
 -1
 -1
@@ -1224,9 +1281,9 @@ ticks
 30.0
 
 SLIDER
-129
+8
 81
-301
+180
 114
 edge-probability
 edge-probability
@@ -1239,9 +1296,9 @@ NIL
 HORIZONTAL
 
 BUTTON
-352
+231
 432
-450
+329
 465
 NIL
 pad-nodes
@@ -1256,10 +1313,10 @@ NIL
 1
 
 MONITOR
-942
-102
-1071
-147
+820
+101
+949
+146
 average-num-friends
 average-num-friends
 17
@@ -1267,10 +1324,10 @@ average-num-friends
 11
 
 MONITOR
-942
-147
-1043
-192
+820
+146
+921
+191
 NIL
 average-num-ff
 17
@@ -1278,10 +1335,10 @@ average-num-ff
 11
 
 MONITOR
-942
-58
-1070
-103
+820
+57
+948
+102
 NIL
 clustering-coefficient
 17
@@ -1289,11 +1346,11 @@ clustering-coefficient
 11
 
 INPUTBOX
-129
+8
 114
-284
+163
 174
-watts-stogatz-k
+watts-strogatz-k
 2.0
 1
 0
@@ -1317,9 +1374,9 @@ NIL
 1
 
 BUTTON
-351
+230
 398
-451
+330
 431
 re-do layout
 layout
@@ -1334,9 +1391,9 @@ NIL
 1
 
 BUTTON
-351
+230
 464
-452
+331
 497
 resize nodes
 resize-nodes
@@ -1351,10 +1408,10 @@ NIL
 1
 
 PLOT
-942
-192
-1142
-342
+1102
+10
+1302
+160
 Degree Distribution
 degree
 # of nodes
@@ -1374,16 +1431,16 @@ INPUTBOX
 164
 70
 starting-num-nodes
-50.0
+100.0
 1
 0
 Number
 
 MONITOR
-942
-11
-1016
-56
+820
+10
+894
+55
 num-nodes
 count turtles
 17
@@ -1391,10 +1448,10 @@ count turtles
 11
 
 PLOT
-942
-344
-1142
-494
+820
+190
+1020
+340
 Friends of friends distribution
 friends of friends
 # of nodes
@@ -1409,10 +1466,10 @@ PENS
 "default" 1.0 1 -16777216 true "" "let max-ff max get-ff-list\nlet min-ff min get-ff-list\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-ff (max-ff + 1)  ;; + 1 to make room for the width of the last bar\nhistogram get-ff-list"
 
 PLOT
-1141
-192
-1341
-342
+1020
+190
+1220
+340
 mean friends of friends distribution
 mean ff value
 # of nodes
@@ -1444,10 +1501,10 @@ NIL
 1
 
 MONITOR
-1017
-11
-1102
-56
+895
+10
+980
+55
 selfish nodes
 selfish-nodes
 17
@@ -1455,10 +1512,10 @@ selfish-nodes
 11
 
 MONITOR
-1103
-11
-1223
-56
+981
+10
+1101
+55
 collaborative nodes
 collaborative-nodes
 17
@@ -1466,9 +1523,9 @@ collaborative-nodes
 11
 
 BUTTON
-302
+181
 81
-452
+331
 114
 Erdrős Rényi baseline
 setup-Erdrős-Rényi
@@ -1494,9 +1551,9 @@ public-goods-flag
 -1000
 
 BUTTON
-288
+167
 46
-452
+331
 79
 Barabási Albert baseline
 setup-Barabási-Albert
@@ -1511,9 +1568,9 @@ NIL
 1
 
 BUTTON
-288
+167
 115
-452
+331
 148
 Watts Strogatz baseline
 setup-Watts-Strogatz
@@ -1543,6 +1600,59 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+819
+341
+1019
+491
+Robustness-1
+number of removed nodes
+fraction giant component
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy num-removed get-fraction-in-giant-component]\n"
+
+BUTTON
+818
+490
+938
+523
+uniform removal
+random-uniform-removal
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+1021
+341
+1221
+491
+Robustness-2
+number of removed nodes
+average path length
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy num-removed average-path-length]\n"
 
 @#$#@#$#@
 ## WHAT IS IT?
