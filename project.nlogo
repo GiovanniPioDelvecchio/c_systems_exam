@@ -7,6 +7,7 @@ globals [
               ; about the robustness of the network
   plot-rob-flag ; this is a flag needed to start the plot about the robustness at a fixed time
                 ; since those plots require functions that are computationally expensive
+  fixed-for-collabs
 ]
 
 ; utility to add an entry to the hashtables, each hastable is defined as a list of
@@ -127,6 +128,39 @@ to setup-Erdrős-Rényi
   reset-ticks
 end
 
+; here's some code about how to link turtles in such a way that
+; they resemble the Erdős-Rényi model, meaning that we
+; add each of the possible n(n-1)/2 links between nodes with probability edge-probability, an external probability value
+to add-edges
+  if not any? turtles [; if we have no turtles we cannot create links
+    print "Set a number of nodes greater than 0 and press 'setup'" ; we report this as a console log
+    stop
+  ]
+  if ((count turtles) = 1) [ ; we cannot create a link from one node to itself
+    print "You need at least two turtles in order to create a link"; we log this
+  ]
+  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
+
+  ; let max-edges = (num-nodes * (num-nodes - 1)) / 2
+  ; we create two indexes needed to access the list of turtles as the
+  ; upper triangular part of the adjacency matrix, whituout the diagonal
+  ; since we cannot create a link from one node to itself
+  let i 0 ; first index in range [0, num-nodes-1]
+  while [i < (count turtles)][
+    let j 0 ; second index in range [0, i]
+    while [j < i] [
+      if (i != j) [
+        if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                                   ; the external parameter we add a link
+          make-edge (turtle i) (turtle j) "default"
+        ]
+      ]
+      set j (j + 1)
+    ]
+    set i (i + 1)
+  ]
+end
+
 ; this is the setup function for the Barabási-Albert model for graphs.
 ; When called by a button it generates a graph with starting-num-nodes nodes.
 ; If we want to use the game theory approach we set the colors as either red or green.
@@ -171,6 +205,50 @@ to setup-Barabási-Albert
   reset-ticks
 end
 
+; procedure needed to add a node in the barabási-albert model.
+; The probability of a node being linked to a certain other node
+; is proportional to the degree of the latter.
+to add-node-preferential-attachment-barabási-albert
+  create-turtles 1 [
+    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
+    set size 1.5 ; here we set the size of the turtle
+    ; if not specified, the color of the turtles will be random
+    set xcor random-xcor
+    set ycor random-ycor
+    if public-goods-flag [
+      ifelse (random-float 1 < 0.5) [
+        set color 15
+      ][
+        set color 55
+      ]
+    ]
+  ]
+  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
+  let just-added-turtle ((length turtle-list) - 1)
+  if (just-added-turtle = 1) [stop] ;if we only have one turtle, namely the one that we just added, we don't have to add links
+  let edge-prob-i 1
+  let edge-prob-acc 0
+
+  let acc-degrees 0
+  set acc-degrees (acc-degrees + (sum [count link-neighbors] of turtles))
+
+  let extracted-rand (random-float 1)
+  let i 0 ; first index in range [0, num-nodes-1]
+  while [i < just-added-turtle][
+    if (acc-degrees = 0) [
+      make-edge (turtle just-added-turtle) (one-of turtles) "default"
+      stop
+    ]
+    ask (turtle i) [set edge-prob-i ((count link-neighbors) / (acc-degrees))
+    set edge-prob-acc (edge-prob-acc + edge-prob-i)]
+    if (extracted-rand <= edge-prob-acc) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                          ; the barbási-albert probability of linking to that node, we create the link
+      make-edge (turtle i) (turtle just-added-turtle) "default"
+      set i just-added-turtle
+    ]
+    set i (i + 1)
+  ]
+end
 
 ; this is the setup function for the Watts-Strogatz model for graphs.
 ; When called by a button it generates a graph with starting-num-nodes nodes.
@@ -209,36 +287,38 @@ to setup-Watts-Strogatz
   reset-ticks
 end
 
-; here's some code about how to link turtles in such a way that
-; they resemble the Erdős-Rényi model, meaning that we
-; add each of the possible n(n-1)/2 links between nodes with probability edge-probability, an external probability value
-to add-edges
-  if not any? turtles [; if we have no turtles we cannot create links
-    print "Set a number of nodes greater than 0 and press 'setup'" ; we report this as a console log
+; procedure needed to add the edges of a Watts-Strogatz graph, in particular
+; we wire nodes with their watts-strogatz-k nearest neighbors, creating a lattice.
+to wire-lattice
+  ; iterate over the turtles
+  if (watts-strogatz-k >= (count turtles)) [
+    print "You need more nodes than neighbors to link"
     stop
   ]
-  if ((count turtles) = 1) [ ; we cannot create a link from one node to itself
-    print "You need at least two turtles in order to create a link"; we log this
-  ]
-  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
-
-  ; let max-edges = (num-nodes * (num-nodes - 1)) / 2
-  ; we create two indexes needed to access the list of turtles as the
-  ; upper triangular part of the adjacency matrix, whituout the diagonal
-  ; since we cannot create a link from one node to itself
-  let i 0 ; first index in range [0, num-nodes-1]
-  while [i < (count turtles)][
-    let j 0 ; second index in range [0, i]
-    while [j < i] [
-      if (i != j) [
-        if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
-                                                   ; the external parameter we add a link
-          make-edge (turtle i) (turtle j) "default"
-        ]
-      ]
+  let n 0
+  while [ n < count turtles ] [
+    let j 1
+    while [j <= watts-strogatz-k] [
+      make-edge (turtle n) (turtle ((n + j) mod count turtles)) "curve"
       set j (j + 1)
     ]
-    set i (i + 1)
+    set n n + 1
+  ]
+
+  ; Because of the way NetLogo draws curved links between turtles of ascending
+  ; `who` number, two of the links near the top of the network will appear
+  ; flipped by default. To avoid this, we used an inverse curved link shape
+  ; ("curve-a") which makes all of the curves face the same direction.
+  let j 0
+  while [j < watts-strogatz-k] [
+    let k 0
+    while [k < watts-strogatz-k] [
+      if (link? j (count turtles - watts-strogatz-k + k)) [
+      ask link j (count turtles - watts-strogatz-k + k) [set shape "curve-a"]
+      ]
+      set k (k + 1)
+    ]
+    set j (j + 1)
   ]
 end
 
@@ -333,7 +413,6 @@ to-report cc-for-single-turtle [turtle-index]
   let acc 0
   let deg 0
   let turtle-list (sort turtles)
-  ;print turtle-index
   ask (item turtle-index turtle-list) [
     let neigh (sort link-neighbors)
     set deg (length neigh)
@@ -368,41 +447,6 @@ to-report clustering-coefficient
   ]
   let reportable (acc / (count turtles))
   report reportable
-end
-
-; procedure needed to add the edges of a Watts-Strogatz graph, in particular
-; we wire nodes with their watts-strogatz-k nearest neighbors, creating a lattice.
-to wire-lattice
-  ; iterate over the turtles
-  if (watts-strogatz-k >= (count turtles)) [
-    print "You need more nodes than neighbors to link"
-    stop
-  ]
-  let n 0
-  while [ n < count turtles ] [
-    let j 1
-    while [j <= watts-strogatz-k] [
-      make-edge (turtle n) (turtle ((n + j) mod count turtles)) "curve"
-      set j (j + 1)
-    ]
-    set n n + 1
-  ]
-
-  ; Because of the way NetLogo draws curved links between turtles of ascending
-  ; `who` number, two of the links near the top of the network will appear
-  ; flipped by default. To avoid this, we used an inverse curved link shape
-  ; ("curve-a") which makes all of the curves face the same direction.
-  let j 0
-  while [j < watts-strogatz-k] [
-    let k 0
-    while [k < watts-strogatz-k] [
-      if (link? j (count turtles - watts-strogatz-k + k)) [
-      ask link j (count turtles - watts-strogatz-k + k) [set shape "curve-a"]
-      ]
-      set k (k + 1)
-    ]
-    set j (j + 1)
-  ]
 end
 
 ; procedure needed to add a link between node-A and node-B with shape the-shape.
@@ -517,51 +561,6 @@ to resize-nodes
   ]
 end
 
-; procedure needed to add a node in the barabási-albert model.
-; The probability of a node being linked to a certain other node
-; is proportional to the degree of the latter.
-to add-node-preferential-attachment-barabási-albert
-  create-turtles 1 [
-    set shape "circle" ; here we set the shape of our turtles: we want to represent nodes
-    set size 1.5 ; here we set the size of the turtle
-    ; if not specified, the color of the turtles will be random
-    set xcor random-xcor
-    set ycor random-ycor
-    if public-goods-flag [
-      ifelse (random-float 1 < 0.5) [
-        set color 15
-      ][
-        set color 55
-      ]
-    ]
-  ]
-  let turtle-list (sort turtles) ; we get the list of turtles that we want to access in order to create the links
-  let just-added-turtle ((length turtle-list) - 1)
-  if (just-added-turtle = 1) [stop] ;if we only have one turtle, namely the one that we just added, we don't have to add links
-  let edge-prob-i 1
-  let edge-prob-acc 0
-
-  let acc-degrees 0
-  set acc-degrees (acc-degrees + (sum [count link-neighbors] of turtles))
-
-  let extracted-rand (random-float 1)
-  let i 0 ; first index in range [0, num-nodes-1]
-  while [i < just-added-turtle][
-    if (acc-degrees = 0) [
-      make-edge (turtle just-added-turtle) (one-of turtles) "default"
-      stop
-    ]
-    ask (turtle i) [set edge-prob-i ((count link-neighbors) / (acc-degrees))
-    set edge-prob-acc (edge-prob-acc + edge-prob-i)]
-    if (extracted-rand <= edge-prob-acc) [ ; here we generate a random-float in [0, 1), if it is lower than
-                                          ; the barbási-albert probability of linking to that node, we create the link
-      make-edge (turtle i) (turtle just-added-turtle) "default"
-      set i just-added-turtle
-    ]
-    set i (i + 1)
-  ]
-end
-
 ; function needed to find which is the connected component of a turtle.
 ; param: starting-turtle, is the starting node for which we want to find the connected component
 ; report: connected-component-list, is the list of nodes in the same
@@ -577,7 +576,6 @@ to-report connected-component [starting-turtle]
   set queue lput current-turtle queue
   ; Iterate through all the links of the given turtle
   while [not empty? queue][
-    ;print queue
     set current-turtle item 0 queue
     set queue remove-item 0 queue
     ask current-turtle [
@@ -875,6 +873,29 @@ to-report update-strategies [threshold]
   report something-changed-flag
 end
 
+to update-strategies-2 [payoff-list payoff-threshold num-neigh-threshold y-max-turtles]
+  let i 0
+  while [i < count turtles][
+    let neigh 0
+    ask turtle i [set neigh count my-links]
+    if (item i payoff-list <= payoff-threshold) or (neigh < num-neigh-threshold) [
+      ifelse (turtle-color turtle i = 15)[
+        ask turtle i [set color 55]
+        set y-i-s replace-item i y-i-s fixed-for-collabs
+      ][
+        ask turtle i [set color 15]
+        ifelse ((random-float 1 < 0.5)) [
+          set y-i-s replace-item i y-i-s (random-float (y-max-turtles)) ; those who abstain will decide to contribute with
+                                                                      ; a random amount in the range [0, y-max-turtles] or not to contribute at all
+        ][
+          set y-i-s replace-item i y-i-s 0
+        ]
+      ]
+    ]
+    set i i + 1
+  ]
+end
+
 ; function needed to initialize the vector containing the contributions of all the nodes
 ; in the game theory based dynamic. Since we are modelling the treaty game, the
 ; nodes that decide to collaborate (the green ones) will all contribute with a fixed amount,
@@ -886,7 +907,7 @@ end
 ; reports: prev-y-i-s, is the modified vector of contributions.
 to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
   set prev-y-i-s []
-  let fixed-for-collabs (random-float (y-max-turtles / 2)) + (y-max-turtles / 2) ; collaborators will all contribute
+  set fixed-for-collabs (random-float (y-max-turtles / 2)) + (y-max-turtles / 2) ; collaborators will all contribute
                                                                                  ; a fixed amount of money wich is more than half of y-max-turtles,
                                                                                  ; selected at random
   let i 0
@@ -907,14 +928,21 @@ to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
 end
 
 
-to-report public-goods
+to-report public-goods [b-abstain b-collaborate]
   let reportable-payoffs-list []
   let selfish-collaborative-vector []
   let y-max-turtles 12
   let something-changed update-strategies 2; we set 2 as the maximum degree for wich a turtle changes strategy
   if (not something-changed) [report something-changed] ; if nothing has changed, we must stop the computation
   set y-i-s initialize-y-i-s y-i-s y-max-turtles
-  set reportable-payoffs-list (get-payoffs-list y-max-turtles)
+  set reportable-payoffs-list (get-payoffs-list y-max-turtles b-abstain b-collaborate)
+  report reportable-payoffs-list
+end
+
+to-report public-goods-3 [y-max-turtles b-abstain b-collaborate]
+  let reportable-payoffs-list []
+  set y-i-s initialize-y-i-s y-i-s y-max-turtles
+  set reportable-payoffs-list (get-payoffs-list y-max-turtles b-abstain b-collaborate)
   report reportable-payoffs-list
 end
 
@@ -942,10 +970,8 @@ end
 ; param: y-max-turtles, is the maximum amount that a turtle can contribute, it is needed since the payoff function
 ;                       is (pi_i = y-max-turtles - y_i) + b(y_i + y_-i)
 ; report: reportable-payoffs-list, is the list of computed payoffs according to the treaty game.
-to-report get-payoffs-list [y-max-turtles]
+to-report get-payoffs-list [y-max-turtles b-abstain b-collaborative]
   let reportable-payoffs-list []
-  let b-abstain 0.7
-  let b-collaborative 1.3
   let i 0
   while [i < count turtles]
   [
@@ -979,85 +1005,6 @@ to-report get-neigh-payoffs [curr-node payoff-list]
   ]
   set reportable lput (item (convert-turtle-to-id curr-node) payoff-list) reportable
   report reportable
-end
-
-
-to gossip-about-public-goods [payoff-list num-to-keep]
-  let gossip-node-1 (turtle (random length payoff-list))
-  let gossip-node-2 (turtle (random length payoff-list))
-  if (hashtable != [] and hashtable != 0) [
-    set gossip-node-1 first (item (length hashtable - 1) hashtable)
-  ;  set gossip-node-2 first (item (length hashtable - 2) hashtable)
-  ]
-
-  set hashtable []
-  while [gossip-node-2 = gossip-node-1] [
-    set gossip-node-2 (turtle (random length payoff-list))
-  ]
-  let neighs-1 []
-  let neighs-2 []
-  ask gossip-node-1 [set neighs-1 sort link-neighbors]
-  set neighs-1 lput gossip-node-1 neighs-1
-  ask gossip-node-2 [set neighs-2 sort link-neighbors]
-  set neighs-2 lput gossip-node-2 neighs-2
-  let neighs-payoffs-1 (get-neigh-payoffs gossip-node-1 payoff-list)
-  let neighs-payoffs-2 (get-neigh-payoffs gossip-node-2 payoff-list)
-  let new-other-ends-1 []
-  let new-other-ends-2 []
-  let i 0
-  ; add elements to the hashtable
-  while [i < (length neighs-payoffs-1)] [
-    set hashtable add hashtable (item i neighs-1) (item i neighs-payoffs-1)
-    set i i + 1
-  ]
-  set i 0
-  while [i < (length neighs-payoffs-2)] [
-    if not member? (list (item i neighs-2) (item i neighs-payoffs-2)) hashtable [
-      set hashtable add hashtable (item i neighs-2) (item i neighs-payoffs-2)
-    ]
-    set i i + 1
-  ]
-  ; sort the hashtable in descending order of payoffs
-  set hashtable selection-sort-hashtable hashtable
-  ; add the turtles with the highest payoff to the new-other-end lists
-  set i 0
-  while [i < length hashtable] [
-    if length new-other-ends-1 < num-to-keep [
-      if (first item i hashtable) != gossip-node-1 [
-        set new-other-ends-1 lput (first item i hashtable) new-other-ends-1
-      ]
-    ]
-    if length new-other-ends-2 < num-to-keep [
-      if (first item i hashtable) != gossip-node-2 [
-        set new-other-ends-2 lput (first item i hashtable) new-other-ends-2
-      ]
-    ]
-    set i i + 1
-  ]
-
-  ; create the links with those new-other-ends
-  set i 0
-  while [i < length new-other-ends-1] [
-    make-edge gossip-node-1 (item i new-other-ends-1) "default"
-    set i i + 1
-  ]
-  ; same must be done for the second gossip node
-  set i 0
-  while [i < length new-other-ends-2] [
-    make-edge gossip-node-2 (item i new-other-ends-2) "default"
-    set i i + 1
-  ]
-
-  ; destroy previous links of the gossiping nodes
-  ask gossip-node-1 [ask my-links [if (random-float 1 < 0.6) [die]]] ; if we simply remove all the links as if we
-                                                                     ; were using the standard newscast, it is very likely
-                                                                     ; that we go on forever playing the game, adding some
-                                                                     ; links and removing them, instead we would like to add
-                                                                     ; new edges according to the outcome of the gossip while keeping
-                                                                     ; some other links
-  ask gossip-node-2 [ask my-links [if (random-float 1 < 0.6) [die]]]
-
-  tick
 end
 
 ; procedure needed to create the view of the gossiping nodes,
@@ -1104,6 +1051,7 @@ to-report get-n-lowest-payoff [payoff-list n-nodes-gossiping]
   let temp-payoff-list payoff-list
   let i 0
   while [i < n-nodes-gossiping] [
+    if temp-payoff-list = [] [report gossiping-turtles]
     let current-min-index argmin temp-payoff-list
     let to-add (item current-min-index temp-nodes)
     set temp-nodes remove-item current-min-index temp-nodes
@@ -1171,15 +1119,97 @@ to gossip-about-public-goods-2 [payoff-list num-to-keep n-nodes-gossiping]
   tick
 end
 
+
+to-report create-y-i-view [gossiping-turtles]
+  let contributions-hash []
+  let current-neighs []
+  let i 0
+  while [i < length gossiping-turtles] [
+    let current-pair (list (item i gossiping-turtles) (item (convert-turtle-to-id (item i gossiping-turtles)) y-i-s))
+    if (not member? current-pair contributions-hash) [
+      set contributions-hash add contributions-hash (first current-pair) (last current-pair)
+    ]
+    ask (item i gossiping-turtles) [
+      set current-neighs (sort link-neighbors)
+    ]
+
+    ;let neighs-payoffs (get-neigh-payoffs (item i gossiping-turtles) payoff-list)
+    let j 0
+    while [j < length current-neighs] [
+      let current-neigh (item j current-neighs)
+      let neigh-contr-to-add (list current-neigh (item (convert-turtle-to-id current-neigh) y-i-s)) ; each neighbor is associated to a contribution
+      if (not member? neigh-contr-to-add contributions-hash) [
+        set contributions-hash add contributions-hash (first neigh-contr-to-add) (last neigh-contr-to-add)
+      ]
+      set j j + 1
+    ]
+    set i i + 1
+  ]
+  set contributions-hash selection-sort-hashtable contributions-hash
+  report contributions-hash
+end
+
+to gossip-about-public-goods-3 [payoff-list n-nodes-gossiping y-max-turtles b-abstain b-collaborate gain-percentage drop-prob]
+  let gossiping-nodes (get-n-lowest-payoff payoff-list n-nodes-gossiping)
+  let hash-view-y-i create-y-i-view gossiping-nodes
+  let i 0
+  while [i < length gossiping-nodes] [
+    ;ask (item i gossiping-nodes) [ask my-links [if ((random-float 1) < 0.8) [die]]]
+    ;let rescaled-hash rescale-with-respect-to-degree hashtable (item i gossiping-nodes)
+    let tur-i item i gossiping-nodes
+    let curr-gossip-idx (convert-turtle-to-id item i gossiping-nodes)
+    let j 0
+    while [j < length hash-view-y-i] [
+      if (first (item j hash-view-y-i)) != tur-i [
+        let improved-payoff 0
+        ifelse ((turtle-color tur-i) = 15) [
+          set improved-payoff ((y-max-turtles - (item curr-gossip-idx y-i-s)) + b-abstain * ((item curr-gossip-idx y-i-s) + (sum-neigh-payoffs y-i-s curr-gossip-idx) + (last item j hash-view-y-i) ))
+        ][
+          set improved-payoff ((y-max-turtles - (item curr-gossip-idx y-i-s)) + b-collaborate * ((item curr-gossip-idx y-i-s) + (sum-neigh-payoffs y-i-s curr-gossip-idx) + (last item j hash-view-y-i) ))
+        ]
+        ifelse improved-payoff >= (item i y-i-s) * gain-percentage
+        [
+          make-edge tur-i (first (item j hash-view-y-i)) "default"
+        ][
+          destroy-edge tur-i (first (item j hash-view-y-i))
+        ]
+      ]
+      set j j + 1
+    ]
+    ask tur-i [ask my-links [if (random-float 1 < drop-prob) [die]]]
+    set i i + 1
+  ]
+  tick
+end
+
 to gossip-about-goods-dynamics
-  let payoff-list public-goods
-  if (payoff-list = False) [stop] ; if nothing has changed, then we stop
-  gossip-about-public-goods payoff-list 5
+  let num-gossiping 2
+  let y-max-turtles 12
+  let b-abstain 0.5
+  let b-collaborate 1.2
+  let gain-percentage 1.2 ; the improved payoff must be at least 120% of the original one
+  let drop-prob 0.6
+  let payoff-list []
+  let payoff-threshold 6
+  let num-nodes-thresh 2
+  ifelse y-i-s = [] or y-i-s = 0 [
+    set payoff-list (public-goods-3 y-max-turtles b-abstain b-collaborate)
+  ]
+  [
+    set payoff-list (get-payoffs-list y-max-turtles b-abstain b-collaborate)
+  ]
+  let min-deg 0
+  ask (item 0 (lowest-degree-nodes 1)) [set min-deg (count my-links)]
+  if min-deg > 4 [stop]
+  gossip-about-public-goods-3 payoff-list num-gossiping y-max-turtles b-abstain b-collaborate gain-percentage drop-prob
+  update-strategies-2 payoff-list payoff-threshold num-nodes-thresh y-max-turtles
 end
 
 to gossip-about-goods-dynamics-2
+  let b-abstain 0.7
+  let b-collaborate 1.3
   if public-goods-flag [
-    let payoff-list public-goods
+    let payoff-list public-goods b-abstain b-collaborate
     if (payoff-list = False) [stop]
     gossip-about-public-goods-2 payoff-list 3 10
   ]
@@ -1269,7 +1299,7 @@ to-report cosine-similarity [vec-1 vec-2]
     print "The two vectors have different shape"
     report reportable
   ]
-  set reportable (dot-product vec-1 vec-2) / (((l2-norm vec-1) * (l2-norm vec-2)) + 1e-6) ; we want to avoid division by 0
+  set reportable (dot-product vec-1 vec-2) / (((l2-norm vec-1) * (l2-norm vec-2)) + 1e-3) ; we want to avoid division by 0
   report reportable
 end
 
@@ -1321,7 +1351,6 @@ to update-chromosomes [num-to-replace mutation-probability]
       stop
     ]
     let nodes-to-replace lowest-degree-nodes num-to-replace
-    ;print nodes-to-replace
     let i 0
     while [i < num-to-replace] [
       let to-change (convert-turtle-to-id (item i nodes-to-replace))
@@ -1388,8 +1417,8 @@ to genetic-dynamics
   update-chromosomes (floor ((count turtles) * 10 / 100)) 0.2
   let min-deg 0
   ask (item 0 (lowest-degree-nodes 1)) [set min-deg (count my-links)]
-  if min-deg > 2 [stop] ;this generated an error
-  update-links-according-to-genetics 4 0.6
+  if min-deg > 4 [stop] ;this generated an error
+  update-links-according-to-genetics 5 0.4
 end
 
 ; procedure needed to randomly remove nodes from the graph in order to
@@ -1402,8 +1431,6 @@ to random-uniform-removal
     tick
   ]
 end
-
-
 
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -1584,7 +1611,7 @@ INPUTBOX
 164
 70
 starting-num-nodes
-50.0
+100.0
 1
 0
 Number
@@ -1699,7 +1726,7 @@ SWITCH
 359
 public-goods-flag
 public-goods-flag
-1
+0
 1
 -1000
 
@@ -1770,7 +1797,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy num-removed get-fraction-in-giant-component]\n"
+"default" 1.0 2 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy num-removed get-fraction-in-giant-component]\n"
 
 BUTTON
 818
@@ -1805,7 +1832,24 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy num-removed average-path-length]\n"
+"default" 1.0 2 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif count turtles <= 50\n[if plot-rob-flag [plotxy num-removed average-path-length]]\n"
+
+BUTTON
+162
+360
+276
+393
+public-goods-fr
+gossip-about-goods-dynamics
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
