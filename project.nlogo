@@ -46,7 +46,7 @@ end
 ; implementation of the selection sort algorithm for hashtables,
 ; given a hashtable it returns the same hashtable but with the
 ; entries ordered in descending order. The value must be a number
-; since we are using ">" as ordering relationship.
+; since we are using ">" as ordering relation.
 ; param: the-hashtable, is the hashtable that we want to order
 ; report: the-hashtable, is the ordered hashtable
 to-report selection-sort-hashtable [the-hashtable]
@@ -596,7 +596,8 @@ to-report connected-component [starting-turtle]
  report connected-component-list
 end
 
-
+; function needed to find the giant component and report the nodes in it
+; reports: node-list-to-report, it is the list of nodes in the giant component
 to-report get-giant-component
   ; a security check, we can talk about components only if we have nodes
   if ((count turtles) < 1) [report []]
@@ -623,9 +624,13 @@ to-report get-giant-component
   report node-list-to-report
 end
 
+; function needed to get the fraction of nodes in the giant component
+; report: reportable, it is the fraction of nodes in the giant component
 to-report get-fraction-in-giant-component
-  if ((count turtles) < 1 ) [report 0]
-  report (length get-giant-component) / (count turtles)
+  let reportable 0
+  if ((count turtles) < 1 ) [report reportable]
+  set reportable (length get-giant-component) / (count turtles)
+  report reportable
 end
 
 ; Breadth first search algorithm implementation
@@ -667,12 +672,20 @@ to-report bfs [start-node target-node]
   report false
 end
 
+; function needed to get the identifying number of a turtle, given the turtle object
+; i.e. the id of turtle 4 is 4
+; param: turtle-to-conv, is the turtle of which we want the identifying number
+; report: to-rep, it is the identifying number of the turtle
 to-report convert-turtle-to-id [turtle-to-conv]
   let to-rep 0
   ask turtle-to-conv [set to-rep who]
   report to-rep
 end
 
+; function needed to find the index of the lowest value in a list
+; param: list-to-check, is the list of which we want to find the index of the lowest value,
+;                       it must be a list of numbers since we are using the "<" ordering relation
+; report: idx-to-rep, is the index of the lowest value in the list list-to-check
 to-report argmin [list-to-check]
   let i 1
   if empty? list-to-check [report False]
@@ -688,6 +701,10 @@ to-report argmin [list-to-check]
   report idx-to-rep
 end
 
+; same function as argmin, but this time we are using ">" as ordering relation
+; param: list-to-check, is the list of which we want to find the index of the highest value,
+;                       it must be a list of numbers since we are using the ">" ordering relation
+; report: idx-to-rep, is the index of the highest value in the list list-to-check
 to-report argmax [list-to-check]
   let i 1
   if empty? list-to-check [report False]
@@ -703,6 +720,14 @@ to-report argmax [list-to-check]
   report idx-to-rep
 end
 
+; function needed to find the distances related to the list of turtles turtle-list.
+; It just creates a list with elements from dist-list that correspond to the turtles in
+; turtle-list.
+; param: dist-list, it is the list of distances from which we want to extract those related to
+;                   the turtles in turtle-list, it has the same length of (count turtles)
+;                   since here are stored the distances related to all the turtles
+; param: turtle-list, it is the list of turtles for which we want to keep the distances
+; report: to-report, it is a list of distances related to the turtles in turtle-list.
 to-report keep-turtle-related [dist-list turtle-list]
   let to-rep []
   let i 0
@@ -714,6 +739,12 @@ to-report keep-turtle-related [dist-list turtle-list]
   report to-rep
 end
 
+; function needed to find the index of a turtle in a list of turtles
+; param: where-check, it is the list of turtles in which we want to find the-turtle
+;                     and report its index
+; param: the-turtle, is the turtle that must be found in where-check in order to report
+;                    its index in that list
+; report: i, is the index of the-turtle in the list where-check
 to-report where-in-list [where-check the-turtle]
   let reportable 0
   if where-check = [] [report False]
@@ -728,8 +759,11 @@ to-report where-in-list [where-check the-turtle]
 end
 
 ; variation of the Dijkstra's algorithm, since in NetLogo we don't really have primitives
-; to indicate the number "Infinity", we decide to use a stupidly large number, in this case
-; 10000000000
+; to indicate the number "Infinity", we decide to use a large number, in this case
+; 10000000000.
+; param: source-t, is the source turtle for which we want to find the shortest path to target-t
+; param: target-t, is the target turtle for which we want to find the shortest path from source-t
+; report: path, is a list of nodes that must be traversed in order to go from source-t to target-t
 to-report shortest-path [source-t target-t]
   let distances []
   let previous []
@@ -778,7 +812,13 @@ to-report shortest-path [source-t target-t]
   ]
 end
 
+; function needed to compute the average path length in the current graph.
+; it seeks all the shortest paths in the graph, compute their lengths
+; and averages them
+; report: reportable, is the average path length of the graph, if there
+;                     are no paths it just reports 0
 to-report average-path-length
+  let reportable 0
   let i 0
   let num-paths 0
   let acc-path-lengths 0
@@ -797,18 +837,29 @@ to-report average-path-length
     set i i + 1
   ]
   ifelse num-paths != 0 [
-    report acc-path-lengths / num-paths
+    set reportable acc-path-lengths / num-paths
+    report reportable
   ][
-    report 0
+    report reportable
   ]
 end
 
+; function needed to get the color of a turtle
+; param: the-turtle, is the turtle of which we want to know the color
+; report: reportable, it is a number identifying the color of the turtle,
+;                     the default value is 15 which is equivalent to the color "red"
 to-report turtle-color [the-turtle]
   let reportable 15
   ask the-turtle [set reportable color]
   report reportable
 end
 
+; function needed in order to update the strategy of nodes in the game theory based dynamic.
+; nodes change strategy when their degree is below threshold.
+; param: threshold, is the threshold of degrees under which a node changes strategy
+; report: something-changed-flage, it is a flag which is True when one of the turtles changed strategy,
+;                                  False if none of them did. It is required to enforce the
+;                                  stopping criterion.
 to-report update-strategies [threshold]
   let something-changed-flag False
   ask turtles [
@@ -824,6 +875,15 @@ to-report update-strategies [threshold]
   report something-changed-flag
 end
 
+; function needed to initialize the vector containing the contributions of all the nodes
+; in the game theory based dynamic. Since we are modelling the treaty game, the
+; nodes that decide to collaborate (the green ones) will all contribute with a fixed amount,
+; which is greater that half y-max-turtles.
+; Those who abstain will either not collaborate at all (they will collaborate 0),
+; or collaborate with a random amount in the continuous range [0, y-max-turtles].
+; param: prev-y-i-s, previous list of contribution
+; param: y-max-turtles, is the maximum contribution that a turtle can give.
+; reports: prev-y-i-s, is the modified vector of contributions.
 to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
   set prev-y-i-s []
   let fixed-for-collabs (random-float (y-max-turtles / 2)) + (y-max-turtles / 2) ; collaborators will all contribute
@@ -834,7 +894,7 @@ to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
     ifelse ((turtle-color turtle i) = 15) [
       ifelse ((random-float 1 < 0.5)) [
         set prev-y-i-s lput (random-float (y-max-turtles)) prev-y-i-s ; those who abstain will decide to contribute with
-                                                                    ; a random amount in the range [0, y-max-turtles] or not to contribute at all
+                                                                      ; a random amount in the range [0, y-max-turtles] or not to contribute at all
       ][
         set prev-y-i-s lput 0 prev-y-i-s
       ]
@@ -845,6 +905,7 @@ to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
   ]
   report prev-y-i-s
 end
+
 
 to-report public-goods
   let reportable-payoffs-list []
@@ -857,6 +918,11 @@ to-report public-goods
   report reportable-payoffs-list
 end
 
+; function needed to compute the sum of the payoffs of the neighbors of a turtle
+; whith id idx. The payoffs are taken from the list l-where-sum, which contains all the payoffs.
+; param: l-where-sum, is the list of payoffs ordered by turtle ids
+; param: idx, is the id of the turtle of which we want the sum of the payoffs of his neighbors
+; report: reportable, is the sum of the payoffs of the neighbors of turtle idx.
 to-report sum-neigh-payoffs [l-where-sum idx]
   let reportable 0
   let neighs []
@@ -872,6 +938,10 @@ to-report sum-neigh-payoffs [l-where-sum idx]
   report reportable
 end
 
+; function needed to compute the list of payoffs according to the treaty game with punishment for non-collaboration.
+; param: y-max-turtles, is the maximum amount that a turtle can contribute, it is needed since the payoff function
+;                       is (pi_i = y-max-turtles - y_i) + b(y_i + y_-i)
+; report: reportable-payoffs-list, is the list of computed payoffs according to the treaty game.
 to-report get-payoffs-list [y-max-turtles]
   let reportable-payoffs-list []
   let b-abstain 0.7
@@ -891,6 +961,13 @@ to-report get-payoffs-list [y-max-turtles]
   report reportable-payoffs-list
 end
 
+; function needed to get the list of payoffs of the neighbors of the node curr-node
+; from the list payoff-list (the payoff of curr-node is added, since is needed for
+; the gossip function)
+; param: curr-node, is the node of which we want to know the payoffs of its neighbors
+; param: payoff-list, is the complete list of payoffs of all nodes
+; report: reportable, is the list of payoffs of the neighbors of curr-node, including
+;                     its payoff
 to-report get-neigh-payoffs [curr-node payoff-list]
   let reportable []
   let neighs []
@@ -903,6 +980,7 @@ to-report get-neigh-payoffs [curr-node payoff-list]
   set reportable lput (item (convert-turtle-to-id curr-node) payoff-list) reportable
   report reportable
 end
+
 
 to gossip-about-public-goods [payoff-list num-to-keep]
   let gossip-node-1 (turtle (random length payoff-list))
@@ -957,8 +1035,6 @@ to gossip-about-public-goods [payoff-list num-to-keep]
     set i i + 1
   ]
 
-
-
   ; create the links with those new-other-ends
   set i 0
   while [i < length new-other-ends-1] [
@@ -984,6 +1060,12 @@ to gossip-about-public-goods [payoff-list num-to-keep]
   tick
 end
 
+; procedure needed to create the view of the gossiping nodes,
+; each node adds to the view its payoff and the payoffs of his neighbors
+; to the public hashtable, which is initialized at each call of this function to [].
+; param: payoff-list, is the complete list of payoffs
+; param: gossiping-turtles, is the list of turtles involved in the gossiping process
+;                           which are the turtles with the lowest payoff
 to update-payoffs-hash [payoff-list gossiping-turtles]
   set hashtable []
   let current-neighs []
@@ -1009,6 +1091,13 @@ to update-payoffs-hash [payoff-list gossiping-turtles]
   set hashtable selection-sort-hashtable hashtable
 end
 
+; function needed to build the list of nodes that will be involved in the gossip
+; process, the selected nodes are those with the lowest payoff.
+; param: payoff-list, is the complete list of payoffs
+; param: n-nodes-gossiping, is the number of nodes which will be involved in the
+;                           gossip process
+; report: gossiping-turtles, is the list of nodes that have the lowest payoff,
+;                            this list have length n-nodes-gossiping
 to-report get-n-lowest-payoff [payoff-list n-nodes-gossiping]
   let gossiping-turtles []
   let temp-nodes (sort turtles)
@@ -1026,6 +1115,14 @@ to-report get-n-lowest-payoff [payoff-list n-nodes-gossiping]
   report gossiping-turtles
 end
 
+; function needed to rescale the-hashtable with respect to the degree of the current node
+; and the degree of each turtle.
+; in particular it generates a new hashtable where the entries are:
+; new-hash[turtle_i] = hashtable[turtle_i]*(degree_the-turtle/degree_node-i).
+; param: the-hashtable, is the hashtable that we want to rescale with respect to the node
+;                       the-turtle
+; param: the-turtle, is the node that will be used in order to rescale the entries of the-hashtable
+; report: new-hash, is the rescaled hashtable
 to-report rescale-with-respect-to-degree [the-hashtable the-turtle]
   ; this function rescales the hashtable containing the payoffs of the neighbors of the considered nodes
   ; with respect to the degree of the-turtle and the degree of his neighbors
@@ -1043,6 +1140,7 @@ to-report rescale-with-respect-to-degree [the-hashtable the-turtle]
   set new-hash selection-sort-hashtable new-hash
   report new-hash
 end
+
 
 to gossip-about-public-goods-2 [payoff-list num-to-keep n-nodes-gossiping]
   let gossiping-nodes (get-n-lowest-payoff payoff-list n-nodes-gossiping)
@@ -1087,7 +1185,9 @@ to gossip-about-goods-dynamics-2
   ]
 end
 
-
+; function needed to compute how many nodes have contribution equal to 0
+; which are considered the selfish ones.
+; report: reportable, is the number of nodes that have contribution equal to 0
 to-report selfish-nodes
   let reportable 0
   let i 0
@@ -1100,10 +1200,17 @@ to-report selfish-nodes
   report reportable
 end
 
+; analogous counterpart of the above function that computes the number
+; of collaborative nodes (namely those that have contribution different from 0)
+; report: reportable, is the number of nodes that have contribution different from 0
 to-report collaborative-nodes
   report (count turtles - selfish-nodes)
 end
 
+; function needed to generate a random vector of 0-1 values with dimension dimension.
+; This function will be used to generate the chromosomes of each node.
+; param: dimension, is the dimension of the randomly generated 0-1 vector
+; report: reportable, is the randomly generated 0-1 vector, a chromosome
 to-report generate-random-vector [dimension]
   let reportable []
   let i 0
@@ -1115,6 +1222,10 @@ to-report generate-random-vector [dimension]
   report reportable
 end
 
+; function needed to compute the l2-norm of the vector the-vector,
+; the l2-norm is computed as sqrt(sum[the-vector[i]^2 for i in range(0, length of the-vector)])
+; param: the-vector, is the vector of which we want to know the l2-norm
+; report: reportable, is the value of the l2-norm of the-vector
 to-report l2-norm [the-vector]
   let reportable 0
   let i 0
@@ -1125,6 +1236,12 @@ to-report l2-norm [the-vector]
   report (sqrt reportable)
 end
 
+; function needed to compute the dot product between the vectors vec-1 and vec-2.
+; The two vectors must have the same dimension in order to compute the product.
+; The dot product is computed as sum[vec-1[i]*vec-2[i] for i in range(0, length of vec-1)]
+; param: vec-1, is the first vector that must be multiplied by the second vector
+; param: vec-2, is the second vector that must be multiplied by the first one
+; report: reportable, is the value of the dot product between vec-1 and vec-2
 to-report dot-product [vec-1 vec-2]
   let reportable 0
   if length vec-1 != length vec-2 [
@@ -1140,6 +1257,12 @@ to-report dot-product [vec-1 vec-2]
   report reportable
 end
 
+; function needed to compute the similarity between the vectors vec-1 and vec-2.
+; The two vectors must have the same dimension in order to compute the cosine similarity.
+; The cosine similarity is computed as: dot-product(vec-1, vec-2)/(l2-norm(vec-1)*l2-norm(vec-2))
+; param: vec-1, is the first vector of which we want to know the similarity with respect to the second one
+; param: vec-2, is the second vector of which we want to know the similarity with respect to the first one
+; report: reportable, is the value of the cosine similarity between vec-1 and vec-2
 to-report cosine-similarity [vec-1 vec-2]
   let reportable 0
   if length vec-1 != length vec-2 [
@@ -1150,6 +1273,10 @@ to-report cosine-similarity [vec-1 vec-2]
   report reportable
 end
 
+; function needed to compute the list of nodes that have the smallest degree in the graph.
+; param: num-lowest, is the number of nodes that have the smallest degree
+;                    that we want to consider
+; report: reportable, is the list of the num-lowest nodes with the smallest degree
 to-report lowest-degree-nodes [num-lowest]
   let reportable []
   let supp-hash []
@@ -1170,6 +1297,14 @@ to-report lowest-degree-nodes [num-lowest]
   report reportable
 end
 
+; procedure needed to update the chromosomes of each node, which are stored in the public hashtable
+; if a node is one of the num-to-replace nodes with the smallest degree
+; we generate a new chromosome. A gene of the chromosome of a node
+; is mutated with probability mutation-probability
+; param: num-to-replace, is the number of nodes with the smallest degree of which
+;                        we want to change the chromosome
+; mutation-probability, is the probability value of a mutation to happen to
+;                       each node
 to update-chromosomes [num-to-replace mutation-probability]
   let vec-size 5
   ifelse hashtable = [] or hashtable = 0 [
@@ -1209,6 +1344,16 @@ to update-chromosomes [num-to-replace mutation-probability]
   ]
 end
 
+; procedure needed to update the edges between the nodes based on how
+; similar a chromosome is to another one and how many links a node has
+; with respect to another one. An edge is added from a node to the num-new-links ones
+; that has the most similar chromosome, rescaled with respect to the degree
+; of both (in other words, degree-of-node-i/degree-of-node-j is the utility function of
+; each pair of nodes, that will be linked together if they have similar chromosomes).
+; After adding the edges, all the edges (those that were already there and the freshly added ones)
+; are dropped with probability drop-links-prob
+; param: num-new-links, is the number of new links that we want to add for each node
+; param: drop-links-prob, is the probability of dropping a single edge.
 to update-links-according-to-genetics [num-new-links drop-links-prob]
   let sim-hash []
   let i 0
@@ -1233,6 +1378,12 @@ to update-links-according-to-genetics [num-new-links drop-links-prob]
   tick
 end
 
+; procedure needed to model the dynamics of the network based on the genetic algorithm,
+; each node has an associated chromosome, we want to consider a number of nodes with the
+; lowest degree equal to 10% of all the nodes.
+; The stopping criterion is that each node must have at least 2 neighbors.
+; We want to drop links with probability 0.2
+; because we want the algorithm to converge in a reasonable time.
 to genetic-dynamics
   update-chromosomes (floor ((count turtles) * 10 / 100)) 0.2
   let min-deg 0
@@ -1241,6 +1392,8 @@ to genetic-dynamics
   update-links-according-to-genetics 4 0.6
 end
 
+; procedure needed to randomly remove nodes from the graph in order to
+; plot the statistics about the robustness of the obtained network.
 to random-uniform-removal
   if (count turtles > 1) [
     set plot-rob-flag True
@@ -1249,7 +1402,6 @@ to random-uniform-removal
     tick
   ]
 end
-
 
 
 
@@ -1290,7 +1442,7 @@ edge-probability
 edge-probability
 0
 1
-0.01
+0.05
 0.01
 1
 NIL
@@ -1432,7 +1584,7 @@ INPUTBOX
 164
 70
 starting-num-nodes
-100.0
+50.0
 1
 0
 Number
@@ -1547,7 +1699,7 @@ SWITCH
 359
 public-goods-flag
 public-goods-flag
-0
+1
 1
 -1000
 
