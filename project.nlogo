@@ -7,7 +7,8 @@ globals [
               ; about the robustness of the network
   plot-rob-flag ; this is a flag needed to start the plot about the robustness at a fixed time
                 ; since those plots require functions that are computationally expensive
-  fixed-for-collabs
+  fixed-for-collabs ; global variable needed to store the contribution of the collaborative nodes
+                    ; it is needed for the game-theory based dynamics
 ]
 
 ; utility to add an entry to the hashtables, each hastable is defined as a list of
@@ -230,7 +231,7 @@ to add-node-preferential-attachment-barabási-albert
   let edge-prob-acc 0
 
   let acc-degrees 0
-  set acc-degrees (acc-degrees + (sum [count link-neighbors] of turtles))
+  set acc-degrees (acc-degrees + (sum [count link-neighbors] of turtles)) ; here we compute the sum of the degrees of each turtle, namely 2mt
 
   let extracted-rand (random-float 1)
   let i 0 ; first index in range [0, num-nodes-1]
@@ -404,6 +405,15 @@ to-report average-num-ff
   report reportable
 end
 
+; function needed to compute the variance of the network from the average mean number of friends of friends
+; report: reportable, is the variance of the graph expressed as the average mean number of friends of friends,
+;                     minus the mean degree of each node, all divided by the mean degree of each node
+to-report friends-variance
+  let reportable 0
+  if (average-num-friends != 0) [set reportable ((average-num-ff - average-num-friends) / average-num-friends) ]
+  report reportable
+end
+
 ; function needed to compute the clustering coefficient of a single turtle identified by its index
 ; in the list of turtles
 ; param: turtle-index, is the index of the turtle for which we want to compute the clustering coefficient
@@ -477,11 +487,23 @@ to-report link? [node-A node-B]
 end
 
 ; procedure needed to destroy a link between node-A and node-B, if it exists.
-; param: node-A, the source of the link.
-; param: node-B, the target of the link.
-to destroy-edge [node-A node-B]
-  if (link? node-A node-B) [
-    ask link node-A node-B [die]
+; param: node-A, the id of the source of the link.
+; param: node-B, the id of the target of the link.
+to destroy-edge [node-A-id node-B-id]
+  if (link? node-A-id node-B-id) [
+    ask link node-A-id node-B-id [die]
+  ]
+end
+
+; procedure needed in order to rewire an edge of node-A (if it has any) in
+; order to have node-B as its target.
+; param: node-A, is the node for which we want to rewire an edge (if node-A has any), in order to have
+;                node-B as its target
+; param: node-B, is the new target of node-A
+to rewire-edge [node-A node-B]
+  if not link? node-A node-B [
+    ask node-A [if count my-links > 0 [ask one-of my-links [die]]]
+    make-edge node-A node-B "default"
   ]
 end
 
@@ -503,13 +525,11 @@ to simple-random-dynamics
     let j 0 ; second index in range [0, i]
     while [j < i] [
       if (i != j) [
-        if ((random-float 1) < edge-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
-                                                 ; the external parameter we add a link
-        ;ask (item i turtle-list) [create-link-with (item j turtle-list)] ; adding a link between nodes accessing the list of turtles.
-          make-edge (turtle i) (turtle j) "default"
-        ]
-        if ((random-float 1) >= edge-probability) [
-          if (link? i j) [destroy-edge i j]
+        let rand-sample (random-float 1)
+        if (rand-sample < rewire-probability) [ ; here we generate a random-float in [0, 1), if it is lower than
+                                                  ; the external parameter rewire an edge of the turtle i to have
+                                                  ; the turtle j as target
+          rewire-edge (turtle i) (turtle j)
         ]
       ]
       set j (j + 1)
@@ -517,6 +537,7 @@ to simple-random-dynamics
     set i (i + 1)
   ]
   tick
+  if ticks >= 2000 [stop]
 end
 
 ; procedure needed to adjust the view of the nodes, it is a modification of
@@ -541,6 +562,8 @@ to layout
   ask turtles [ setxy (xcor - x-offset / 2) (ycor - y-offset / 2) ]
 end
 
+; function needed to report limit or -limit if number exceeds the range [-limit, limit]
+; otherwise number is reported.
 to-report limit-magnitude [number limit]
   if number > limit [ report limit ]
   if number < (- limit) [ report (- limit) ]
@@ -627,47 +650,8 @@ end
 to-report get-fraction-in-giant-component
   let reportable 0
   if ((count turtles) < 1 ) [report reportable]
-  set reportable (length get-giant-component) / (count turtles)
+  set reportable (length get-giant-component) / starting-num-nodes
   report reportable
-end
-
-; Breadth first search algorithm implementation
-to-report bfs [start-node target-node]
-  ; Create an empty queue for storing the nodes to visit
-  let queue []
-  ; Add the start node to the queue
-  set queue lput start-node queue
-
-  ; Create a list to store the nodes that have been visited
-  let visited []
-
-  ; Run the BFS algorithm until the queue is empty
-  while [not empty? queue] [
-    ; Get the next node from the queue
-    let current-node first queue
-    set queue but-first queue
-
-    ; If the current node is the target node, stop the search
-    if current-node = target-node [
-      if not member? current-node visited [
-        set visited lput current-node visited
-      ]
-      report visited
-    ]
-
-    ; If the current node has not been visited yet, add it to the visited list
-    if not member? current-node visited [
-      set visited lput current-node visited
-      ; Add all the neighbors of the current node to the queue
-      ask current-node [
-        ask my-links [
-          set queue lput other-end queue
-        ]
-      ]
-    ]
-  ]
-  ; If the target node was not found, return false
-  report false
 end
 
 ; function needed to get the identifying number of a turtle, given the turtle object
@@ -852,28 +836,13 @@ to-report turtle-color [the-turtle]
   report reportable
 end
 
-; function needed in order to update the strategy of nodes in the game theory based dynamic.
-; nodes change strategy when their degree is below threshold.
-; param: threshold, is the threshold of degrees under which a node changes strategy
-; report: something-changed-flage, it is a flag which is True when one of the turtles changed strategy,
-;                                  False if none of them did. It is required to enforce the
-;                                  stopping criterion.
-to-report update-strategies [threshold]
-  let something-changed-flag False
-  ask turtles [
-    if (count my-links < threshold) [
-      set something-changed-flag True
-      ifelse (color = 15)[
-        set color 55
-      ][
-        set color 15
-      ]
-    ]
-  ]
-  report something-changed-flag
-end
-
-to update-strategies-2 [payoff-list payoff-threshold num-neigh-threshold y-max-turtles]
+; procedure needed to update the strategies of the turtles in the game theory approach if their payoff goes below
+; payoff-threshold, or their degree goes below num-neigh-threshold.
+; param: payoff-list, is the list of payoffs to consider, entry_i correspond to the turtle (turtle i)
+; param: payoff-threshold, is the payoff threshold below which the turtle changes strategy
+; param: num-neigh-threshold, is the degree threshold below which the turtle changes strategy
+; param: y-max-turtles, is the maximum amount that a turtle can contribute to the Treaty Game
+to update-strategies [payoff-list payoff-threshold num-neigh-threshold y-max-turtles]
   let i 0
   while [i < count turtles][
     let neigh 0
@@ -927,17 +896,6 @@ to-report initialize-y-i-s [prev-y-i-s y-max-turtles]
   report prev-y-i-s
 end
 
-
-to-report public-goods [b-abstain b-collaborate]
-  let reportable-payoffs-list []
-  let selfish-collaborative-vector []
-  let y-max-turtles 12
-  let something-changed update-strategies 2; we set 2 as the maximum degree for wich a turtle changes strategy
-  if (not something-changed) [report something-changed] ; if nothing has changed, we must stop the computation
-  set y-i-s initialize-y-i-s y-i-s y-max-turtles
-  set reportable-payoffs-list (get-payoffs-list y-max-turtles b-abstain b-collaborate)
-  report reportable-payoffs-list
-end
 
 to-report public-goods-3 [y-max-turtles b-abstain b-collaborate]
   let reportable-payoffs-list []
@@ -1075,11 +1033,11 @@ to-report rescale-with-respect-to-degree [the-hashtable the-turtle]
   ; this function rescales the hashtable containing the payoffs of the neighbors of the considered nodes
   ; with respect to the degree of the-turtle and the degree of his neighbors
   let new-hash the-hashtable
-  let turt-deg 1e-3
+  let turt-deg 0.5
   ask the-turtle [if count my-links > 0 [set turt-deg count my-links]]
   let i 0
   while [i < length new-hash][
-    let deg-hash-i 1e-3
+    let deg-hash-i 0.5
     ask (first (item i new-hash)) [if (count my-links > 0)[set deg-hash-i count my-links]]
     let to-place (list (first (item i new-hash)) ((last (item i new-hash)) * (turt-deg / deg-hash-i)) )
     set new-hash replace-item i new-hash to-place
@@ -1089,37 +1047,10 @@ to-report rescale-with-respect-to-degree [the-hashtable the-turtle]
   report new-hash
 end
 
-
-to gossip-about-public-goods-2 [payoff-list num-to-keep n-nodes-gossiping]
-  let gossiping-nodes (get-n-lowest-payoff payoff-list n-nodes-gossiping)
-  update-payoffs-hash payoff-list gossiping-nodes
-  let i 0
-  while [i < length gossiping-nodes] [
-    ask (item i gossiping-nodes) [ask my-links [if ((random-float 1) < 0.8) [die]]]
-    let rescaled-hash rescale-with-respect-to-degree hashtable (item i gossiping-nodes)
-    let j 0
-    while [j < num-to-keep] [
-      ifelse length rescaled-hash - j > 0 [
-        if first (item j rescaled-hash) != (item i gossiping-nodes)[
-          if (random-float 1 < 0.8) [
-            make-edge (item i gossiping-nodes) (first (item j rescaled-hash)) "default"
-          ]
-        ]
-      ][
-        if (random-float 1 < 0.5) [
-          let diff-turtle turtle (random count turtles) ; if the rescaled hashtable is too small we add a random edge
-          while [(item i gossiping-nodes) = diff-turtle] [set diff-turtle turtle (random count turtles)]
-          make-edge (item i gossiping-nodes) diff-turtle "default"
-        ]
-      ]
-      set j j + 1
-    ]
-    set i i + 1
-  ]
-  tick
-end
-
-
+; function needed to construct the view of the nodes in the game theory approach, given the list of gossiping turtles
+; param: gossiping-turtles, is the list of turtles involved in the gossip procedure
+; report: contributions-hash, is an hashtable that contains turtles as keys and their contribution as values,
+;                             entries are: nodes in gossiping-turtles plus their neighbors and their contributions
 to-report create-y-i-view [gossiping-turtles]
   let contributions-hash []
   let current-neighs []
@@ -1149,13 +1080,22 @@ to-report create-y-i-view [gossiping-turtles]
   report contributions-hash
 end
 
-to gossip-about-public-goods-3 [payoff-list n-nodes-gossiping y-max-turtles b-abstain b-collaborate gain-percentage drop-prob]
+; procedure needed to perform the operations associated to the nodes that are gossiping:
+; creation of the view, creation of links from each node to those who improve their payoff
+; by percentage gain-percentage, deletion of edges that do not improve the payoff and
+; drop of all the edges with a certain probability
+; param: payoff-list, is the list of payoff of the nodes
+; param: n-nodes-gossiping, is the number of nodes that are gossiping
+; param: y-max-turtles, is the maximum amount that a turtle can contribute to the treaty game
+; param: b-abstain, is the marginal gain of those nodes that abstain from the treaty
+; param: b-collaborate, is the marginal gain of those nodes that sign to the treaty
+; param: gain-percentage, is the payoff improvement that must be observed in order to add a new link (expressed as a percentage)
+; param: drop-prob, is the probability of dropping each of all the edges
+to gossip-about-public-goods [payoff-list n-nodes-gossiping y-max-turtles b-abstain b-collaborate gain-percentage drop-prob]
   let gossiping-nodes (get-n-lowest-payoff payoff-list n-nodes-gossiping)
   let hash-view-y-i create-y-i-view gossiping-nodes
   let i 0
   while [i < length gossiping-nodes] [
-    ;ask (item i gossiping-nodes) [ask my-links [if ((random-float 1) < 0.8) [die]]]
-    ;let rescaled-hash rescale-with-respect-to-degree hashtable (item i gossiping-nodes)
     let tur-i item i gossiping-nodes
     let curr-gossip-idx (convert-turtle-to-id item i gossiping-nodes)
     let j 0
@@ -1182,37 +1122,32 @@ to gossip-about-public-goods-3 [payoff-list n-nodes-gossiping y-max-turtles b-ab
   tick
 end
 
+; procedure needed to model the dynamics of the network based on the game theory
+; "Treaty Game" approach.
+; It is responsible for: the creation and the update of the payoff list and the list of contributions,
+; the gossip between the turtles and the change of the strategy of them
 to gossip-about-goods-dynamics
   let num-gossiping 2
   let y-max-turtles 12
-  let b-abstain 0.5
+  let b-abstain 0.6
   let b-collaborate 1.2
-  let gain-percentage 1.2 ; the improved payoff must be at least 120% of the original one
+  let gain-percentage 1.1 ; the improved payoff must be at least 110% of the original one
   let drop-prob 0.6
   let payoff-list []
-  let payoff-threshold 6
-  let num-nodes-thresh 2
+  let payoff-threshold 4
+  let num-neigh-thresh 2
   ifelse y-i-s = [] or y-i-s = 0 [
     set payoff-list (public-goods-3 y-max-turtles b-abstain b-collaborate)
   ]
   [
     set payoff-list (get-payoffs-list y-max-turtles b-abstain b-collaborate)
   ]
+  gossip-about-public-goods payoff-list num-gossiping y-max-turtles b-abstain b-collaborate gain-percentage drop-prob
+  update-strategies payoff-list payoff-threshold num-neigh-thresh y-max-turtles
   let min-deg 0
   ask (item 0 (lowest-degree-nodes 1)) [set min-deg (count my-links)]
-  if min-deg > 4 [stop]
-  gossip-about-public-goods-3 payoff-list num-gossiping y-max-turtles b-abstain b-collaborate gain-percentage drop-prob
-  update-strategies-2 payoff-list payoff-threshold num-nodes-thresh y-max-turtles
-end
-
-to gossip-about-goods-dynamics-2
-  let b-abstain 0.7
-  let b-collaborate 1.3
-  if public-goods-flag [
-    let payoff-list public-goods b-abstain b-collaborate
-    if (payoff-list = False) [stop]
-    gossip-about-public-goods-2 payoff-list 3 10
-  ]
+  if min-deg >= min-deg-to-reach [stop]
+  if ticks >= 2000 [stop]
 end
 
 ; function needed to compute how many nodes have contribution equal to 0
@@ -1299,7 +1234,11 @@ to-report cosine-similarity [vec-1 vec-2]
     print "The two vectors have different shape"
     report reportable
   ]
-  set reportable (dot-product vec-1 vec-2) / (((l2-norm vec-1) * (l2-norm vec-2)) + 1e-3) ; we want to avoid division by 0
+  let l2-v1 l2-norm vec-1
+  let l2-v2 l2-norm vec-2
+  if l2-v1 != 0 and l2-v2 != 0 [ ; we want to avoid division by 0
+    set reportable (dot-product vec-1 vec-2) / (((l2-norm vec-1) * (l2-norm vec-2)))
+  ]
   report reportable
 end
 
@@ -1410,15 +1349,21 @@ end
 ; procedure needed to model the dynamics of the network based on the genetic algorithm,
 ; each node has an associated chromosome, we want to consider a number of nodes with the
 ; lowest degree equal to 10% of all the nodes.
-; The stopping criterion is that each node must have at least 2 neighbors.
-; We want to drop links with probability 0.2
-; because we want the algorithm to converge in a reasonable time.
+; The stopping criterion is that each node must have at least 4 neighbors.
+; We want to drop links with probability 0.4
 to genetic-dynamics
+  ;let min-deg-to-reach 3
   update-chromosomes (floor ((count turtles) * 10 / 100)) 0.2
+  update-links-according-to-genetics 3 0.4
   let min-deg 0
   ask (item 0 (lowest-degree-nodes 1)) [set min-deg (count my-links)]
-  if min-deg > 4 [stop] ;this generated an error
-  update-links-according-to-genetics 5 0.4
+  if min-deg >= min-deg-to-reach [stop]
+  if ticks >= 2000 [stop]
+end
+
+; function needed to report the fraction of removed nodes, it is necessary for the plots
+to-report frac-removed
+  report num-removed / starting-num-nodes
 end
 
 ; procedure needed to randomly remove nodes from the graph in order to
@@ -1432,6 +1377,30 @@ to random-uniform-removal
   ]
 end
 
+; procedure needed to remove the nodes with the highest degree from the graph in order to
+; plot the statistics about the robustness of the obtained network.
+to preferential-removal
+  let max-deg 0
+  let turt-list (sort turtles)
+  let to-remove item 0 turt-list
+  ask to-remove [if count my-links > max-deg [set max-deg count my-links]]
+  let i 1
+  while [i < count turtles] [
+    ask item i turt-list [
+      if count my-links > max-deg [
+        (set max-deg count my-links)
+        (set to-remove item i turt-list)
+      ]
+    ]
+    set i i + 1
+  ]
+  if (count turtles > 1) [
+    set plot-rob-flag True
+    set num-removed (num-removed + 1)
+    ask (to-remove) [die]
+    tick
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 331
@@ -1461,25 +1430,25 @@ ticks
 30.0
 
 SLIDER
-8
+9
 81
 180
 114
 edge-probability
 edge-probability
 0
-1
+0.2
 0.05
-0.01
+0.05
 1
 NIL
 HORIZONTAL
 
 BUTTON
-231
-432
-329
-465
+530
+499
+628
+532
 NIL
 pad-nodes
 NIL
@@ -1506,9 +1475,9 @@ average-num-friends
 MONITOR
 820
 146
-921
+955
 191
-NIL
+average-mean-num-ff
 average-num-ff
 17
 1
@@ -1525,22 +1494,11 @@ clustering-coefficient
 1
 11
 
-INPUTBOX
-8
-114
-163
-174
-watts-strogatz-k
-2.0
-1
-0
-Number
-
 BUTTON
-3
-293
-169
-326
+7
+160
+173
+193
 NIL
 simple-random-dynamics
 T
@@ -1554,10 +1512,10 @@ NIL
 1
 
 BUTTON
-230
-398
-330
-431
+329
+499
+429
+532
 re-do layout
 layout
 T
@@ -1571,10 +1529,10 @@ NIL
 1
 
 BUTTON
-230
-464
-331
-497
+430
+499
+531
+532
 resize nodes
 resize-nodes
 NIL
@@ -1607,11 +1565,11 @@ PENS
 
 INPUTBOX
 9
-10
+22
 164
-70
+82
 starting-num-nodes
-100.0
+10.0
 1
 0
 Number
@@ -1663,23 +1621,6 @@ false
 PENS
 "default" 1.0 1 -16777216 true "" "let max-ff max get-mean-ff-list\nlet min-ff min get-mean-ff-list\nplot-pen-reset  ;; erase what we plotted before\nset-plot-x-range min-ff (max-ff + 1)  ;; + 1 to make room for the width of the last bar\nhistogram get-mean-ff-list"
 
-BUTTON
-3
-360
-159
-393
-public-goods-dynamics
-gossip-about-goods-dynamics-2
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 MONITOR
 895
 10
@@ -1720,13 +1661,13 @@ NIL
 1
 
 SWITCH
-3
-326
-153
-359
+181
+13
+331
+46
 public-goods-flag
 public-goods-flag
-0
+1
 1
 -1000
 
@@ -1765,10 +1706,10 @@ NIL
 1
 
 BUTTON
-4
-394
-131
-427
+47
+227
+174
+260
 genetic-dynamics
 genetic-dynamics
 T
@@ -1787,7 +1728,7 @@ PLOT
 1019
 491
 Robustness-1
-number of removed nodes
+fraction of removed nodes
 fraction giant component
 0.0
 10.0
@@ -1797,7 +1738,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 2 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy num-removed get-fraction-in-giant-component]\n"
+"default" 1.0 0 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif plot-rob-flag [plotxy frac-removed get-fraction-in-giant-component]\n"
 
 BUTTON
 818
@@ -1822,7 +1763,7 @@ PLOT
 1221
 491
 Robustness-2
-number of removed nodes
+fraction of removed nodes
 average path length
 0.0
 10.0
@@ -1832,13 +1773,13 @@ true
 false
 "" ""
 PENS
-"default" 1.0 2 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif count turtles <= 50\n[if plot-rob-flag [plotxy num-removed average-path-length]]\n"
+"default" 1.0 0 -16777216 true "" "set-plot-x-range 0 (count turtles)\nif count turtles <= 50\n[if plot-rob-flag [plotxy frac-removed average-path-length]]\n"
 
 BUTTON
-162
-360
-276
-393
+60
+193
+174
+226
 public-goods-fr
 gossip-about-goods-dynamics
 T
@@ -1851,42 +1792,106 @@ NIL
 NIL
 1
 
+MONITOR
+955
+146
+1087
+191
+variance
+friends-variance
+17
+1
+11
+
+CHOOSER
+8
+114
+146
+159
+watts-strogatz-k
+watts-strogatz-k
+1 2
+1
+
+BUTTON
+938
+490
+1082
+523
+NIL
+preferential-removal
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+0
+266
+328
+498
+Friends-Plot
+ticks
+friends
+0.0
+2000.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"average-friends" 1.0 0 -955883 true "" "set-plot-x-range 0 ticks + 1\nplot average-num-friends"
+"average-mean-ff" 1.0 0 -14454117 true "" "plot average-num-ff"
+
+SLIDER
+173
+160
+331
+193
+rewire-probability
+rewire-probability
+0
+0.2
+0.2
+0.05
+1
+NIL
+HORIZONTAL
+
+CHOOSER
+176
+205
+314
+250
+min-deg-to-reach
+min-deg-to-reach
+2 3 4 5 6
+1
+
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This is the project for the exam "Complex Systems and Network Science" made by Giovanni Pio Delvecchio (Student ID: 0001037185, e-mail: giovanni.delvecchio2@studio.unibo.it).
+It is a simulation needed for studying how the average number of friends of a node in a graph is related to the mean average number of friends of friends in a graph.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+In this simulation, turtles are seen as node in a graph, they can be generated by
+following one of the implemented classical models for graph configurations
+and their dynamics is defined by three algorithms:
+- a simple random dynamics algorithm
+- a game-theory based algorithm
+- a genetic-based algorithm
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
-
-## THINGS TO NOTICE
-
-(suggested things for the user to notice while running the model)
-
-## THINGS TO TRY
-
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
-
-## EXTENDING THE MODEL
-
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
-
-## NETLOGO FEATURES
-
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
-
-## RELATED MODELS
-
-(models in the NetLogo Models Library and elsewhere which are of related interest)
-
-## CREDITS AND REFERENCES
-
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+This simulation is intended to be used by considering the buttons at the left of the view from top to bottom. The number of turtles and some probabilities can be modified.
 @#$#@#$#@
 default
 true
